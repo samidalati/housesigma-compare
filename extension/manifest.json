@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "HouseSigma Compare",
+  "version": "1.0.8",
+  "description": "Save HouseSigma listings and compare them in a table — no server required.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HouseSigma Compare"
+  },
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://housesigma.com/*",
+    "https://www.housesigma.com/*",
+    "https://router.project-osrm.org/*",
+    "https://nominatim.openstreetmap.org/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://housesigma.com/*",
+        "https://www.housesigma.com/*"
+      ],
+      "js": [
+        "lib/fields.js",
+        "lib/normalize.js",
+        "lib/commute.js",
+        "lib/storage.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://housesigma.com/*",
+        "https://www.housesigma.com/*"
+      ],
+      "js": ["page-extract.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    }
+  ]
+}

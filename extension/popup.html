@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HouseSigma Compare</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      width: 320px;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #f0f4f8;
+      color: #1a2332;
+    }
+    .wrap { padding: 14px; }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 1.05rem;
+      color: #0d6e6e;
+    }
+    .meta { font-size: 0.8rem; color: #5c6b7a; margin-bottom: 6px; }
+    .hint {
+      font-size: 0.8rem;
+      color: #5c6b7a;
+      margin: 0 0 12px;
+      line-height: 1.35;
+      min-height: 2.2em;
+    }
+    .hint.saved { color: #0d6e6e; font-weight: 600; }
+    .btn {
+      display: block;
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: #0d6e6e; color: #fff; }
+    .btn-primary:hover { background: #0a5555; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-secondary {
+      background: #fff;
+      color: #0d6e6e;
+      border: 1px solid #0d6e6e;
+    }
+    .btn-secondary:hover { background: #e8f4f4; }
+    .status {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      min-height: 2.5em;
+      line-height: 1.35;
+    }
+    .status.err { color: #c0392b; }
+    .status.ok { color: #0d6e6e; }
+    .spinner {
+      display: none;
+      width: 1em;
+      height: 1em;
+      margin-right: 6px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+    .btn.is-loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>HouseSigma Compare</h1>
+    <p class="meta"><span id="count">0</span> properties saved</p>
+    <p class="hint" id="hint">Open a HouseSigma listing page.</p>
+    <div id="actions">
+      <button type="button" class="btn btn-primary" id="refresh-btn">
+        <span class="spinner" aria-hidden="true"></span>
+        Refresh current property
+      </button>
+      <button type="button" class="btn btn-secondary" id="add-btn">
+        <span class="spinner" aria-hidden="true"></span>
+        Add current property
+      </button>
+    </div>
+    <button type="button" class="btn btn-secondary" id="open-compare-btn">
+      Open comparison table
+    </button>
+    <p class="status" id="status" role="status"></p>
+  </div>
+  <script src="lib/fields.js"></script>
+  <script src="lib/normalize.js"></script>
+  <script src="lib/storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
