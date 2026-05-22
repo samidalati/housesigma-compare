@@ -272,8 +272,10 @@ header.hero p {
 .table-wrap {
   overflow-x: auto;
 }
-table {
-  width: 100%;
+table.compare-table {
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
 }
@@ -283,11 +285,61 @@ td {
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
+  overflow: hidden;
+}
+th.th-resizable {
+  position: relative;
+  padding-right: 0.85rem;
+}
+.th-inner {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 th {
   background: #f7fafc;
   font-weight: 600;
   white-space: nowrap;
+}
+#compare-head th {
+  vertical-align: middle;
+}
+#compare-head .th-inner {
+  display: flex;
+  align-items: center;
+  min-height: 1.5rem;
+  cursor: grab;
+}
+#compare-head th.sortable-chosen .th-inner {
+  cursor: grabbing;
+}
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  touch-action: none;
+}
+#compare-head .col-resize-handle {
+  cursor: col-resize;
+}
+.col-header-drag-hint {
+  display: inline-flex;
+  color: var(--muted);
+  opacity: 0.65;
+  pointer-events: none;
+}
+.col-resize-handle:hover {
+  background: rgba(26, 95, 95, 0.2);
+}
+body.is-col-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-col-resizing * {
+  cursor: col-resize;
 }
 .th-sortable {
   cursor: pointer;
@@ -319,16 +371,18 @@ th {
 th.col-property,
 td.col-property,
 th.col-address,
-td.col-address {
-  min-width: 10rem;
-  max-width: 16rem;
+td.col-address,
+th.col-description,
+td.col-description,
+th.col-user_notes,
+td.col-user_notes {
   white-space: normal;
   word-break: break-word;
 }
 th.col-description,
-td.col-description {
-  min-width: 25.2rem;
-  max-width: 39.2rem;
+td.col-description,
+th.col-user_notes,
+td.col-user_notes {
   vertical-align: top;
 }
 .desc-cell {
@@ -375,12 +429,6 @@ td.col-description {
 .desc-cell.is-expanded .btn-desc-expand svg {
   transform: rotate(180deg);
 }
-th.col-user_notes,
-td.col-user_notes {
-  min-width: 25.2rem;
-  max-width: 39.2rem;
-  vertical-align: top;
-}
 .notes-input {
   display: block;
   width: 100%;
@@ -404,13 +452,9 @@ td.col-user_notes {
   color: var(--muted);
 }
 th.col-lot_size,
-td.col-lot_size {
-  min-width: 11rem;
-  white-space: normal;
-}
+td.col-lot_size,
 th.col-size,
 td.col-size {
-  min-width: 10rem;
   white-space: normal;
 }
 .table-toolbar {
@@ -462,14 +506,12 @@ td.col-size {
 .col-select,
 .col-viewed {
   text-align: center;
-  width: 3.25rem;
 }
 .col-score {
   text-align: center;
-  width: 3rem;
 }
 .score-select {
-  width: 2.5rem;
+  width: 100%;
   max-width: 2.5rem;
   padding: 0.15rem 0.1rem;
   font-size: 0.82rem;
@@ -496,16 +538,12 @@ tr.compare-row.is-selected {
 tr.compare-row:hover {
   background: #fafcfd;
 }
-.col-drag {
-  width: 2rem;
-}
 .drag-handle {
   cursor: grab;
   color: var(--muted);
   display: flex;
 }
 .col-photo {
-  width: 8.5rem;
   vertical-align: top;
 }
 .photo-slot {

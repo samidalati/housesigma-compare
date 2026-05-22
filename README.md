@@ -41,6 +41,8 @@ If the property is not saved yet, use **Add current property** first.
 - **Description** — from HouseSigma; collapsed with expand control.
 - **Notes** — your notes (up to 1000 characters), saved on blur.
 - **Sort** — click a column header to sort; click again to reverse.
+- **Column width** — drag the right edge of a header to resize; double-click the edge to fit content (within min/max limits). Widths are saved.
+- **Column order** — drag a header (hold briefly, then drag) to reorder columns; order is saved.
 - **Delete** — removes selected properties from the list.
 - **Export** — CSV for selected rows only.
 - **Highlight rules** (red text): Low Income > 10%, Renters > 30%, Households With Children < 40%, Avg Household Income < $100k.

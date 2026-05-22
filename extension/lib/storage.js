@@ -7,6 +7,8 @@ HSCompare.defaultSettings = function defaultSettings() {
   return {
     officeAddress: "",
     officeCoords: null,
+    columnWidths: {},
+    columnOrder: [],
   };
 };
 

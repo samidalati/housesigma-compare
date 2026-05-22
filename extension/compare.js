@@ -27,6 +27,29 @@
   };
   const selectedKeys = new Set();
   const sortState = { column: null, dir: "asc" };
+  let resizeDrag = null;
+  let saveColumnWidthsTimer = null;
+
+  const COLUMN_LAYOUT = {
+    drag: { min: 28, max: 56, default: 32 },
+    select: { min: 44, max: 72, default: 52 },
+    viewed: { min: 52, max: 80, default: 56 },
+    score: { min: 44, max: 72, default: 48 },
+    photo: { min: 120, max: 180, default: 136 },
+    property: { min: 96, max: 480, default: 168 },
+    map: { min: 52, max: 120, default: 72 },
+    address: { min: 96, max: 480, default: 168 },
+    description: { min: 140, max: 560, default: 280 },
+    user_notes: { min: 140, max: 560, default: 280 },
+    listed_price: { min: 72, max: 160, default: 96 },
+    last_sold_price: { min: 72, max: 160, default: 96 },
+    drive_to_office: { min: 56, max: 120, default: 72 },
+    transit_to_office: { min: 56, max: 120, default: 80 },
+    lot_size: { min: 88, max: 200, default: 120 },
+    lot_area: { min: 72, max: 160, default: 96 },
+    size: { min: 72, max: 160, default: 96 },
+    _default: { min: 56, max: 240, default: 88 },
+  };
 
   const ICON_REFRESH =
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1.1 6.4 2.8L21 8"/><path d="M21 3v5h-5"/></svg>';
@@ -224,6 +247,129 @@
     }
   }
 
+  function ensureColumnWidths() {
+    if (!data.settings.columnWidths) data.settings.columnWidths = {};
+  }
+
+  function defaultColumnOrder() {
+    return [
+      "drag",
+      "select",
+      "viewed",
+      "score",
+      "photo",
+      "property",
+      "map",
+      ...TABLE_COLS(),
+    ];
+  }
+
+  function ensureColumnOrder() {
+    if (!Array.isArray(data.settings.columnOrder)) {
+      data.settings.columnOrder = [];
+    }
+  }
+
+  function getColumnOrder() {
+    const defaults = defaultColumnOrder();
+    const saved = data.settings.columnOrder;
+    if (!Array.isArray(saved) || !saved.length) return defaults;
+    const valid = new Set(defaults);
+    const order = [];
+    for (const c of saved) {
+      if (valid.has(c) && !order.includes(c)) order.push(c);
+    }
+    for (const c of defaults) {
+      if (!order.includes(c)) order.push(c);
+    }
+    return order;
+  }
+
+  async function saveColumnOrder() {
+    const stored = await HSCompare.loadAll();
+    stored.settings = {
+      ...HSCompare.defaultSettings(),
+      ...(stored.settings || {}),
+      columnOrder: [...getColumnOrder()],
+      columnWidths: {
+        ...(stored.settings?.columnWidths || {}),
+        ...data.settings.columnWidths,
+      },
+    };
+    await HSCompare.saveAll(stored);
+  }
+
+  function columnLayout(col) {
+    return COLUMN_LAYOUT[col] || COLUMN_LAYOUT._default;
+  }
+
+  function clampColumnWidth(col, width) {
+    const layout = columnLayout(col);
+    return Math.round(Math.min(layout.max, Math.max(layout.min, width)));
+  }
+
+  function getColumnWidth(col) {
+    ensureColumnWidths();
+    const saved = data.settings.columnWidths[col];
+    if (saved != null && Number.isFinite(saved)) {
+      return clampColumnWidth(col, saved);
+    }
+    return columnLayout(col).default;
+  }
+
+  function setColumnWidth(col, widthPx) {
+    ensureColumnWidths();
+    const w = clampColumnWidth(col, widthPx);
+    data.settings.columnWidths[col] = w;
+    const colEl = document.querySelector(`#compare-cols col[data-col="${col}"]`);
+    if (colEl) colEl.style.width = `${w}px`;
+  }
+
+  function renderColgroup() {
+    const cg = document.getElementById("compare-cols");
+    if (!cg) return;
+    cg.innerHTML = getColumnOrder()
+      .map((col) => {
+        const w = getColumnWidth(col);
+        return `<col data-col="${esc(col)}" style="width:${w}px">`;
+      })
+      .join("");
+  }
+
+  function measureColumnContentWidth(col) {
+    const table = document.getElementById("compare-table");
+    const layout = columnLayout(col);
+    if (!table) return layout.default;
+    const cells = table.querySelectorAll(`th.col-${col}, td.col-${col}`);
+    if (!cells.length) return layout.default;
+    const prevLayout = table.style.tableLayout;
+    table.style.tableLayout = "auto";
+    let maxW = layout.min;
+    cells.forEach((cell) => {
+      maxW = Math.max(maxW, cell.scrollWidth + 12);
+    });
+    table.style.tableLayout = prevLayout || "fixed";
+    return clampColumnWidth(col, maxW);
+  }
+
+  function scheduleSaveColumnWidths() {
+    clearTimeout(saveColumnWidthsTimer);
+    saveColumnWidthsTimer = setTimeout(async () => {
+      const stored = await HSCompare.loadAll();
+      stored.settings = {
+        ...HSCompare.defaultSettings(),
+        ...(stored.settings || {}),
+        columnWidths: { ...data.settings.columnWidths },
+      };
+      await HSCompare.saveAll(stored);
+    }, 400);
+  }
+
+  function resizableTh(col, innerHtml, extraClass) {
+    const cls = extraClass ? ` ${extraClass}` : "";
+    return `<th class="col-${col} th-resizable${cls}" data-col="${col}"><div class="th-inner">${innerHtml}</div><span class="col-resize-handle" data-col="${col}" title="Drag to resize. Double-click to fit content." role="separator" aria-orientation="vertical"></span></th>`;
+  }
+
   function sortableTh(col, label) {
     const active = sortState.column === col;
     const ariaSort = active
@@ -232,8 +378,49 @@
         : "descending"
       : "none";
     const arrow = active ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
-    return `<th class="col-${col} th-sortable${active ? ` is-sorted-${sortState.dir}` : ""}" data-sort-col="${esc(col)}" aria-sort="${ariaSort}" tabindex="0" title="Sort by ${esc(label)}"><span class="th-sort-label">${esc(label)}</span><span class="sort-indicator" aria-hidden="true">${arrow}</span></th>`;
+    const inner = `<span class="th-sort-label">${esc(label)}</span><span class="sort-indicator" aria-hidden="true">${arrow}</span>`;
+    const extra = `th-sortable${active ? ` is-sorted-${sortState.dir}` : ""}`;
+    return `<th class="col-${col} th-resizable ${extra}" data-col="${col}" data-sort-col="${esc(col)}" aria-sort="${ariaSort}" tabindex="0" title="Sort by ${esc(label)}"><div class="th-inner">${inner}</div><span class="col-resize-handle" data-col="${col}" title="Drag to resize. Double-click to fit content." role="separator" aria-orientation="vertical"></span></th>`;
   }
+
+  function bindColumnResize() {
+    if (document.documentElement.dataset.colResizeBound) return;
+    document.documentElement.dataset.colResizeBound = "1";
+
+    document.addEventListener(
+      "mousedown",
+      (e) => {
+        const handle = e.target.closest("#compare-head .col-resize-handle");
+        if (!handle) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const col = handle.getAttribute("data-col");
+        if (!col) return;
+        const head = document.getElementById("compare-head");
+        if (head?.columnSortable) head.columnSortable.option("disabled", true);
+        resizeDrag = { col, startX: e.clientX, startW: getColumnWidth(col) };
+        document.body.classList.add("is-col-resizing");
+      },
+      true
+    );
+
+    document.addEventListener(
+      "dblclick",
+      (e) => {
+        const handle = e.target.closest("#compare-head .col-resize-handle");
+        if (!handle) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const col = handle.getAttribute("data-col");
+        if (!col) return;
+        setColumnWidth(col, measureColumnContentWidth(col));
+        scheduleSaveColumnWidths();
+      },
+      true
+    );
+  }
+
   function householdIncomeHighlightClass(val) {
     const n = parseDollarAmount(val);
     return Number.isFinite(n) && n < 100000 ? " cell-income-low" : "";
@@ -429,13 +616,23 @@
     return row[col] ?? "";
   }
 
+  function orderedExportCols() {
+    const allowed = new Set(EXPORT_COLS());
+    const fromOrder = getColumnOrder().filter((c) => allowed.has(c));
+    const seen = new Set(fromOrder);
+    for (const c of EXPORT_COLS()) {
+      if (!seen.has(c)) fromOrder.push(c);
+    }
+    return fromOrder;
+  }
+
   function exportSelectedCsv() {
     const keys = data.urls.filter((k) => selectedKeys.has(k) && rowForKey(k));
     if (!keys.length) {
       toast("Select at least one property", true);
       return;
     }
-    const cols = EXPORT_COLS();
+    const cols = orderedExportCols();
     const labels = COLUMN_LABELS();
     const header = cols.map((c) => labels[c] || HSCompare.columnLabel(c));
     const lines = [header.map(csvEscape).join(",")];
@@ -455,99 +652,170 @@
     toast(`Exported ${keys.length} propert${keys.length === 1 ? "y" : "ies"}`);
   }
 
+  function headerForColumn(col) {
+    const labels = COLUMN_LABELS();
+    switch (col) {
+      case "drag":
+        return resizableTh(
+          "drag",
+          `<span class="col-header-drag-hint" aria-hidden="true">${ICON_GRIP}</span>`
+        );
+      case "select":
+        return resizableTh(
+          "select",
+          '<input type="checkbox" class="select-checkbox" id="select-all-checkbox" aria-label="Select all" />'
+        );
+      case "viewed":
+        return sortableTh("viewed", "Viewed");
+      case "score":
+        return sortableTh("score", "Score");
+      case "photo":
+        return resizableTh("photo", "Photo");
+      case "property":
+        return sortableTh("property", "Property");
+      case "map":
+        return resizableTh("map", "Map");
+      default:
+        if (TABLE_COLS().includes(col)) {
+          return sortableTh(col, labels[col] || HSCompare.columnLabel(col));
+        }
+        return "";
+    }
+  }
+
+  function bodyCellForColumn(col, key, row) {
+    const title = row.address || row.url || key;
+    const propLink = `<a class="property-link" href="${esc(row.url || key)}" target="_blank" rel="noopener">${esc(title)}</a>`;
+    const maps = row.google_maps
+      ? `<a class="map-link" href="${esc(row.google_maps)}" target="_blank" rel="noopener">${ICON_MAP}<span>Map</span></a>`
+      : '<span class="cell-empty">—</span>';
+
+    switch (col) {
+      case "drag":
+        return `<td class="col-drag"><span class="drag-handle" title="Drag to reorder row">${ICON_GRIP}</span></td>`;
+      case "select":
+        return selectCell(key);
+      case "viewed":
+        return viewedCell(key, row);
+      case "score":
+        return scoreCell(key, row);
+      case "photo":
+        return `<td class="col-photo">${photoCell(row, key)}</td>`;
+      case "property":
+        return `<td class="col-property">${propLink}</td>`;
+      case "map":
+        return `<td class="col-map">${maps}</td>`;
+      default:
+        break;
+    }
+
+    const val = row[col] ?? "";
+    let cellClass = String(val).trim() ? "" : "cell-empty";
+    if (col === "low_income") cellClass += lowIncomeHighlightClass(val);
+    if (col === "renters") cellClass += rentersHighlightClass(val);
+    if (col === "households_with_children") {
+      cellClass += householdsChildrenHighlightClass(val);
+    }
+    if (col === "average_household_income") {
+      cellClass += householdIncomeHighlightClass(val);
+    }
+    let inner;
+    if (col === "drive_to_office") {
+      const driveCell = driveToOfficeCell(key, row);
+      cellClass = driveCell.cellClass;
+      inner = driveCell.inner;
+    } else if (col === "transit_to_office" && String(val).startsWith("http")) {
+      inner = `<a class="property-link" href="${esc(val)}" target="_blank" rel="noopener">Transit</a>`;
+    } else if (col === "description") {
+      const descCell = descriptionCell(val);
+      cellClass = descCell.cellClass;
+      inner = descCell.inner;
+    } else if (col === "user_notes") {
+      cellClass = "col-user_notes";
+      inner = userNotesInner(key, row);
+    } else {
+      inner = esc(val);
+    }
+    return `<td class="${cellClass.trim()} col-${col}">${inner}</td>`;
+  }
+
+  function setupColumnHeaderSortable() {
+    const head = document.getElementById("compare-head");
+    if (!head || typeof Sortable === "undefined") return;
+    if (head.columnSortable) head.columnSortable.destroy();
+    head.columnSortable = Sortable.create(head, {
+      animation: 150,
+      handle: ".th-inner",
+      draggable: "th",
+      filter: "input, select, textarea, button, a",
+      preventOnFilter: true,
+      delay: 120,
+      delayOnTouchOnly: false,
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      onEnd: async () => {
+        const order = [...head.querySelectorAll("th[data-col]")]
+          .map((th) => th.getAttribute("data-col"))
+          .filter(Boolean);
+        if (!order.length) return;
+        data.settings.columnOrder = order;
+        try {
+          await saveColumnOrder();
+          renderColgroup();
+          renderTable(data.urls);
+          toast("Column order saved");
+        } catch (e) {
+          toast(String(e.message || e), true);
+          renderTableHead();
+        }
+      },
+    });
+  }
+
   function renderTableHead() {
     const head = document.getElementById("compare-head");
-    const labels = COLUMN_LABELS();
-    let html = [
-      `<th class="col-drag"></th>`,
-      `<th class="col-select"><input type="checkbox" class="select-checkbox" id="select-all-checkbox" aria-label="Select all" /></th>`,
-      sortableTh("viewed", "Viewed"),
-      sortableTh("score", "Score"),
-      `<th class="col-photo">Photo</th>`,
-      sortableTh("property", "Property"),
-      `<th class="col-map">Map</th>`,
-    ];
-    for (const col of TABLE_COLS()) {
-      html.push(
-        sortableTh(col, labels[col] || HSCompare.columnLabel(col))
-      );
-    }
-    head.innerHTML = html.join("");
+    head.innerHTML = getColumnOrder().map(headerForColumn).join("");
     const selectAll = document.getElementById("select-all-checkbox");
     if (selectAll) {
-      selectAll.addEventListener("change", () => {
+      selectAll.onchange = () => {
         const keys = data.urls.filter((k) => rowForKey(k));
         if (selectAll.checked) keys.forEach((k) => selectedKeys.add(k));
         else keys.forEach((k) => selectedKeys.delete(k));
         renderTable(data.urls);
-      });
+      };
     }
+    renderColgroup();
+    bindColumnResize();
+    setupColumnHeaderSortable();
   }
 
   function renderTable(urls) {
     const tbody = document.getElementById("compare-body");
-    const colSpan = 7 + TABLE_COLS().length;
+    const colSpan = getColumnOrder().length;
+    const columns = getColumnOrder();
     const displayUrls = orderUrlsForDisplay(urls);
     const rows = displayUrls
       .map((key) => {
         const row = rowForKey(key);
         if (!row) return "";
-        const title = row.address || row.url || key;
-        const propLink = `<a class="property-link" href="${esc(row.url || key)}" target="_blank" rel="noopener">${esc(title)}</a>`;
-        const maps = row.google_maps
-          ? `<a class="map-link" href="${esc(row.google_maps)}" target="_blank" rel="noopener">${ICON_MAP}<span>Map</span></a>`
-          : '<span class="cell-empty">—</span>';
         const selectedClass = selectedKeys.has(key) ? " is-selected" : "";
-        let tds = [
-          `<td class="col-drag"><span class="drag-handle" title="Drag to reorder">${ICON_GRIP}</span></td>`,
-          selectCell(key),
-          viewedCell(key, row),
-          scoreCell(key, row),
-          `<td class="col-photo">${photoCell(row, key)}</td>`,
-          `<td class="col-property">${propLink}</td>`,
-          `<td class="col-map">${maps}</td>`,
-        ];
-        for (const col of TABLE_COLS()) {
-          const val = row[col] ?? "";
-          let cellClass = String(val).trim() ? "" : "cell-empty";
-          if (col === "low_income") cellClass += lowIncomeHighlightClass(val);
-          if (col === "renters") cellClass += rentersHighlightClass(val);
-          if (col === "households_with_children") {
-            cellClass += householdsChildrenHighlightClass(val);
-          }
-          if (col === "average_household_income") {
-            cellClass += householdIncomeHighlightClass(val);
-          }
-          let inner;
-          if (col === "drive_to_office") {
-            const driveCell = driveToOfficeCell(key, row);
-            cellClass = driveCell.cellClass;
-            inner = driveCell.inner;
-          } else if (col === "transit_to_office" && String(val).startsWith("http")) {
-            inner = `<a class="property-link" href="${esc(val)}" target="_blank" rel="noopener">Transit</a>`;
-          } else if (col === "description") {
-            const descCell = descriptionCell(val);
-            cellClass = descCell.cellClass;
-            inner = descCell.inner;
-          } else if (col === "user_notes") {
-            cellClass = "col-user_notes";
-            inner = userNotesInner(key, row);
-          } else {
-            inner = esc(val);
-          }
-          tds.push(`<td class="${cellClass.trim()} col-${col}">${inner}</td>`);
-        }
-        return `<tr class="compare-row${selectedClass}" data-url-key="${urlAttrKey(key)}">${tds.join("")}</tr>`;
+        const tds = columns
+          .map((col) => bodyCellForColumn(col, key, row))
+          .filter(Boolean)
+          .join("");
+        return `<tr class="compare-row${selectedClass}" data-url-key="${urlAttrKey(key)}">${tds}</tr>`;
       })
       .join("");
     tbody.innerHTML =
       rows || `<tr><td colspan="${colSpan}">No properties. Add listings from the extension popup on HouseSigma.</td></tr>`;
     setupSortable();
     updateExportUi();
+    renderColgroup();
   }
 
   function renderAll() {
     updateCommuteOpenButton();
+    renderTableHead();
     renderTable(data.urls);
     document.getElementById("prop-count").textContent = String(data.urls.length);
     document.getElementById("generated").textContent =
@@ -559,7 +827,16 @@
     data.urls = payload.urls || data.urls;
     data.properties = payload.properties || data.properties;
     if (payload.generated) data.generated = payload.generated;
-    if (payload.settings) data.settings = payload.settings;
+    if (payload.settings) {
+      data.settings = {
+        ...HSCompare.defaultSettings(),
+        ...payload.settings,
+        columnWidths: { ...(payload.settings.columnWidths || {}) },
+        columnOrder: [...(payload.settings.columnOrder || [])],
+      };
+    }
+    ensureColumnWidths();
+    ensureColumnOrder();
     const valid = new Set(data.urls);
     for (const key of [...selectedKeys]) {
       if (!valid.has(key)) selectedKeys.delete(key);
@@ -748,14 +1025,31 @@
   });
 
   document.getElementById("compare-head").addEventListener("click", (e) => {
+    if (e.target.closest(".col-resize-handle")) return;
     const th = e.target.closest(".th-sortable");
     if (!th) return;
     const col = th.getAttribute("data-sort-col");
     if (!col) return;
     applyColumnSort(col);
   });
+  document.addEventListener("mousemove", (e) => {
+    if (!resizeDrag) return;
+    const dx = e.clientX - resizeDrag.startX;
+    setColumnWidth(resizeDrag.col, resizeDrag.startW + dx);
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!resizeDrag) return;
+    resizeDrag = null;
+    document.body.classList.remove("is-col-resizing");
+    const head = document.getElementById("compare-head");
+    if (head?.columnSortable) head.columnSortable.option("disabled", false);
+    scheduleSaveColumnWidths();
+  });
+
   document.getElementById("compare-head").addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target.closest(".col-resize-handle")) return;
     const th = e.target.closest(".th-sortable");
     if (!th) return;
     e.preventDefault();
@@ -852,6 +1146,7 @@
     }
   });
 
+  bindColumnResize();
   renderTableHead();
   loadSortable()
     .then(() => reload())
