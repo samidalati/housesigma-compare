@@ -93,7 +93,7 @@ HSCompare.fillDriveTimesForUrls = async function fillDriveTimesForUrls(
   for (const u of urls || []) {
     const row = properties[u];
     if (!row) continue;
-    if (!force && row.drive_to_office) continue;
+    if (!force && String(row.drive_to_office ?? "").trim()) continue;
     const coords = HSCompare.propertyCoords(row);
     if (!coords) continue;
     const drive = await HSCompare.osrmDriveTime(

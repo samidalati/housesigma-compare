@@ -12,7 +12,7 @@
     "default_popup": "popup.html",
     "default_title": "HouseSigma Compare"
   },
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
     "https://housesigma.com/*",
     "https://www.housesigma.com/*",
@@ -27,6 +27,7 @@
       ],
       "js": [
         "lib/fields.js",
+        "lib/discover-fields.js",
         "lib/normalize.js",
         "lib/commute.js",
         "lib/storage.js",

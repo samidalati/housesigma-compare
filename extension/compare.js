@@ -20,8 +20,8 @@
     urls: [],
     properties: {},
     settings: HSCompare.defaultSettings(),
-    tableColumns: HSCompare.TABLE_COLUMNS,
-    exportColumns: HSCompare.EXPORT_COLUMNS,
+    tableColumns: HSCompare.getTableColumns(HSCompare.defaultSettings(), {}),
+    exportColumns: HSCompare.getExportColumns(HSCompare.defaultSettings(), {}),
     columnLabels: HSCompare.COLUMN_LABELS,
     generated: "",
   };
@@ -29,6 +29,8 @@
   const sortState = { column: null, dir: "asc" };
   let resizeDrag = null;
   let saveColumnWidthsTimer = null;
+  let driveAutoFillInProgress = false;
+  let tableWrapEl = null;
 
   const COLUMN_LAYOUT = {
     drag: { min: 28, max: 56, default: 32 },
@@ -121,74 +123,23 @@
   function householdsChildrenHighlightClass(val) {
     return percentHighlightClass(val, 40, "cell-households-children-low", "lt");
   }
-  function parseDollarAmount(val) {
-    const digits = String(val).replace(/[^0-9.]/g, "");
-    if (!digits) return NaN;
-    return parseFloat(digits);
-  }
-
-  function parsePercent(val) {
-    const m = String(val).match(/([\d.]+)/);
-    return m ? parseFloat(m[1]) : NaN;
-  }
-
   function sortValueForColumn(row, col) {
     if (col === "property") {
       return String(row.address || row.url || "").toLowerCase();
     }
     if (col === "viewed") return row.viewed ? 1 : 0;
-    if (col === "score") return HSCompare.normalizeScore(row.score);
     if (col === "user_notes") {
       const notes = HSCompare.userNotesFromRow(row);
       return notes ? notes.toLowerCase() : null;
     }
 
+    const numeric = HSCompare.numericValueForColumn(row, col);
+    if (numeric != null && Number.isFinite(numeric)) return numeric;
+
     const s = String(row[col] ?? "").trim();
     if (!s) return null;
-
-    if (col === "drive_to_office") {
-      const m = s.match(/(\d+)\s*min/i);
-      return m ? Number(m[1]) : null;
-    }
-    if (col === "last_sold_date" || col === "scraped_at") {
-      const t = Date.parse(s);
-      return Number.isFinite(t) ? t : null;
-    }
-    if (col === "days_on_market") {
-      const m = s.match(/(\d+)/);
-      return m ? Number(m[1]) : null;
-    }
     if (col === "lot_area" || col === "lot_size") {
       const n = parseFloat(s.replace(/[^0-9.]/g, ""));
-      return Number.isFinite(n) ? n : s.toLowerCase();
-    }
-    if (
-      col === "listed_price" ||
-      col === "last_sold_price" ||
-      col === "property_tax" ||
-      col === "average_home_value" ||
-      col === "average_household_income"
-    ) {
-      const n = parseDollarAmount(s);
-      return Number.isFinite(n) ? n : null;
-    }
-    if (
-      col === "low_income" ||
-      col === "renters" ||
-      col === "condos" ||
-      col === "households_with_children"
-    ) {
-      const n = parsePercent(s);
-      return Number.isFinite(n) ? n : null;
-    }
-    if (
-      col === "bedrooms" ||
-      col === "bathrooms" ||
-      col === "garages" ||
-      col === "parking_spots" ||
-      col === "elementary_school_score"
-    ) {
-      const n = parseFloat(s.replace(/[^\d.]/g, ""));
       return Number.isFinite(n) ? n : s.toLowerCase();
     }
     return s.toLowerCase();
@@ -261,6 +212,7 @@
       "property",
       "map",
       ...TABLE_COLS(),
+      "user_notes",
     ];
   }
 
@@ -323,17 +275,72 @@
     data.settings.columnWidths[col] = w;
     const colEl = document.querySelector(`#compare-cols col[data-col="${col}"]`);
     if (colEl) colEl.style.width = `${w}px`;
+    const pinColEl = document.querySelector(
+      `#compare-cols-pin col[data-col="${col}"]`
+    );
+    if (pinColEl) pinColEl.style.width = `${w}px`;
   }
 
-  function renderColgroup() {
-    const cg = document.getElementById("compare-cols");
-    if (!cg) return;
-    cg.innerHTML = getColumnOrder()
+  function colgroupHtml() {
+    return getColumnOrder()
       .map((col) => {
         const w = getColumnWidth(col);
         return `<col data-col="${esc(col)}" style="width:${w}px">`;
       })
       .join("");
+  }
+
+  function renderColgroup() {
+    const html = colgroupHtml();
+    const cg = document.getElementById("compare-cols");
+    if (cg) cg.innerHTML = html;
+    const pinCg = document.getElementById("compare-cols-pin");
+    if (pinCg) pinCg.innerHTML = html;
+    syncPinnedCompareHeader();
+  }
+
+  function syncPinnedHeadMarkup() {
+    const head = document.getElementById("compare-head");
+    const pinRow = document.getElementById("compare-head-pin-row");
+    if (!head || !pinRow) return;
+    pinRow.innerHTML = head.innerHTML;
+    pinRow.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  }
+
+  function syncPinnedCompareHeader() {
+    const wrap =
+      tableWrapEl || document.querySelector(".panel.panel--table .table-wrap");
+    const table = document.getElementById("compare-table");
+    const pin = document.getElementById("compare-head-pin");
+    const pinInner = pin?.querySelector(".compare-head-pin-inner");
+    const pinTable = pin?.querySelector(".compare-table--head-pin");
+    const headRow = document.getElementById("compare-head");
+    if (!wrap || !table || !pin || !headRow) return;
+
+    const headH = headRow.getBoundingClientRect().height;
+    const tableRect = table.getBoundingClientRect();
+    const active = tableRect.top < 0 && tableRect.bottom > headH + 4;
+
+    pin.classList.toggle("is-active", active);
+    pin.setAttribute("aria-hidden", active ? "false" : "true");
+    if (!active) return;
+
+    const wrapRect = wrap.getBoundingClientRect();
+    pin.style.left = `${wrapRect.left}px`;
+    pin.style.width = `${Math.max(0, wrapRect.width)}px`;
+    if (pinTable) pinTable.style.width = `${table.offsetWidth}px`;
+    if (pinInner) pinInner.scrollLeft = wrap.scrollLeft;
+  }
+
+  function initPinnedCompareHeader() {
+    tableWrapEl = document.querySelector(".panel.panel--table .table-wrap");
+    if (!tableWrapEl || document.documentElement.dataset.headPinBound) return;
+    document.documentElement.dataset.headPinBound = "1";
+    const wrap = tableWrapEl;
+    const onSync = () => syncPinnedCompareHeader();
+    window.addEventListener("scroll", onSync, { passive: true });
+    wrap.addEventListener("scroll", onSync, { passive: true });
+    window.addEventListener("resize", onSync);
   }
 
   function measureColumnContentWidth(col) {
@@ -422,7 +429,7 @@
   }
 
   function householdIncomeHighlightClass(val) {
-    const n = parseDollarAmount(val);
+    const n = HSCompare.parseDollarAmount(val);
     return Number.isFinite(n) && n < 100000 ? " cell-income-low" : "";
   }
 
@@ -516,6 +523,57 @@
     return { ok: true, drive, key: saveKey };
   }
 
+  function urlsNeedingDriveTime() {
+    return data.urls.filter((u) => {
+      const row = data.properties[u];
+      if (!row) return false;
+      if (String(row.drive_to_office ?? "").trim()) return false;
+      return !!HSCompare.propertyCoords(row);
+    });
+  }
+
+  async function autoFillMissingDriveTimes() {
+    if (driveAutoFillInProgress) return;
+    const pending = urlsNeedingDriveTime();
+    if (!pending.length) return;
+
+    const office = await getOfficeCoords();
+    if (!office) return;
+
+    driveAutoFillInProgress = true;
+    try {
+      if (pending.length > 1) {
+        toast(`Calculating drive times for ${pending.length} properties…`);
+      }
+      const stored = await HSCompare.loadAll();
+      const updated = await HSCompare.fillDriveTimesForUrls(
+        stored.properties,
+        stored.urls,
+        office
+      );
+      if (updated > 0) {
+        await HSCompare.saveAll(stored);
+        Object.assign(data.properties, stored.properties);
+        renderTable(data.urls);
+        if (pending.length === 1) {
+          toast("Drive time updated.");
+        } else if (updated < pending.length) {
+          toast(
+            `Drive time updated for ${updated} of ${pending.length} properties.`
+          );
+        } else {
+          toast(
+            `Drive time updated for ${updated} propert${updated === 1 ? "y" : "ies"}.`
+          );
+        }
+      }
+    } catch (err) {
+      toast(String(err.message || err), true);
+    } finally {
+      driveAutoFillInProgress = false;
+    }
+  }
+
   function driveToOfficeCell(key, row) {
     const val = String(row.drive_to_office ?? "").trim();
     if (val) {
@@ -578,6 +636,368 @@
     return `<textarea class="notes-input" data-url="${esc(key)}" maxlength="${HSCompare.USER_NOTES_MAX}" rows="3" placeholder="Add notes…" aria-label="Notes">${esc(text)}</textarea>`;
   }
 
+  const CHART_MAX_HEIGHT = 400;
+  const CHART_BAND_BOTTOM = 112;
+  const CHART_PAD_LEFT = 104;
+  let chartHoverHit = null;
+
+  const CHART_COLORS = [
+    "#0d6e6e",
+    "#e07b39",
+    "#5b6ee8",
+    "#c0392b",
+    "#8e44ad",
+    "#16a085",
+    "#d4ac0d",
+    "#2c3e50",
+  ];
+
+  let saveChartSettingsTimer = null;
+
+  function ensureChartSettings() {
+    if (!Array.isArray(data.settings.chartColumns)) {
+      data.settings.chartColumns = [];
+    }
+    if (typeof data.settings.chartSelectedOnly !== "boolean") {
+      data.settings.chartSelectedOnly = false;
+    }
+  }
+
+  function chartPropertyKeys() {
+    const keys = data.urls.filter((k) => rowForKey(k));
+    if (!data.settings.chartSelectedOnly) return keys;
+    return keys.filter((k) => selectedKeys.has(k));
+  }
+
+  function chartableColumnsForPicker() {
+    const cols = ["score", ...TABLE_COLS()];
+    return HSCompare.chartableColumnIds(
+      cols,
+      data.properties,
+      chartPropertyKeys()
+    );
+  }
+
+  function propertyChartLabel(row, key) {
+    const addr = String(row?.address || "").trim();
+    if (addr) {
+      const short = addr.split(",")[0].trim();
+      return short.length > 28 ? `${short.slice(0, 26)}…` : short;
+    }
+    try {
+      const u = new URL(key);
+      const slug = u.pathname.split("/").filter(Boolean).pop() || "Listing";
+      return slug.length > 24 ? `${slug.slice(0, 22)}…` : slug;
+    } catch (_) {
+      return "Property";
+    }
+  }
+
+  function propertyChartTitle(row, key) {
+    const addr = String(row?.address || "").trim();
+    if (addr) return addr;
+    return String(row?.url || key || "Property");
+  }
+
+  function findChartHit(mx, my, hits) {
+    if (!hits?.length) return null;
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const h = hits[i];
+      if (mx >= h.x && mx < h.x + h.w && my >= h.y && my < h.y + h.h) return h;
+    }
+    return null;
+  }
+
+  function chartHitKey(hit) {
+    return hit ? `${hit.col}:${hit.gi}` : "";
+  }
+
+  function showChartTooltip(hit, clientX, clientY) {
+    const tooltip = document.getElementById("chart-tooltip");
+    const wrap = document.querySelector(".chart-wrap");
+    if (!tooltip || !wrap || !hit) return;
+    tooltip.hidden = false;
+    tooltip.innerHTML = `<strong>${esc(hit.propertyName)}</strong><span>${esc(hit.columnLabel)}: ${esc(hit.displayValue)}</span>`;
+    const wrapRect = wrap.getBoundingClientRect();
+    let left = clientX - wrapRect.left + 12;
+    let top = clientY - wrapRect.top + 12;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    requestAnimationFrame(() => {
+      const tipRect = tooltip.getBoundingClientRect();
+      if (left + tipRect.width > wrapRect.width - 8) {
+        left = Math.max(8, wrapRect.width - tipRect.width - 8);
+      }
+      if (top + tipRect.height > wrapRect.height - 8) {
+        top = Math.max(8, wrapRect.height - tipRect.height - 8);
+      }
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+    });
+  }
+
+  function hideChartTooltip() {
+    const tooltip = document.getElementById("chart-tooltip");
+    if (tooltip) tooltip.hidden = true;
+  }
+
+  function redrawChartCanvas() {
+    const canvas = document.getElementById("compare-chart");
+    const draw = canvas?._chartDraw;
+    if (!canvas || !draw || canvas.style.display === "none") return;
+    const hits = drawComparisonChart(
+      canvas,
+      draw.keys,
+      draw.seriesCols,
+      chartHoverHit
+    );
+    canvas._chartHits = hits;
+  }
+
+  function scheduleSaveChartSettings() {
+    clearTimeout(saveChartSettingsTimer);
+    saveChartSettingsTimer = setTimeout(async () => {
+      const stored = await HSCompare.loadAll();
+      stored.settings = {
+        ...HSCompare.defaultSettings(),
+        ...(stored.settings || {}),
+        chartColumns: [...(data.settings.chartColumns || [])],
+        chartSelectedOnly: !!data.settings.chartSelectedOnly,
+      };
+      await HSCompare.saveAll(stored);
+    }, 400);
+  }
+
+  function readChartColumnsFromPicker() {
+    const selected = [];
+    document.querySelectorAll(".chart-column-checkbox").forEach((cb) => {
+      if (cb.checked) selected.push(cb.getAttribute("data-chart-col"));
+    });
+    return selected.filter(Boolean);
+  }
+
+  function renderChartColumnPicker() {
+    const picker = document.getElementById("chart-columns-picker");
+    if (!picker) return;
+    ensureChartSettings();
+    const chartable = chartableColumnsForPicker();
+    const saved = new Set(data.settings.chartColumns || []);
+    const labels = COLUMN_LABELS();
+    if (!chartable.length) {
+      const scope = data.settings.chartSelectedOnly ? "selected" : "saved";
+      picker.innerHTML = `<p class="chart-picker-empty">No numeric data in ${scope} properties for visible columns. Add or refresh listings, or turn off “Selected properties only”.</p>`;
+      return;
+    }
+    picker.innerHTML = chartable
+      .map((col) => {
+        const checked = saved.has(col) ? " checked" : "";
+        const label =
+          labels[col] || HSCompare.columnLabel(col, data.settings);
+        return `<label class="chart-column-option"><input type="checkbox" class="chart-column-checkbox" data-chart-col="${esc(col)}"${checked} /><span>${esc(label)}</span></label>`;
+      })
+      .join("");
+  }
+
+  function drawComparisonChart(canvas, keys, seriesCols, hoverHit) {
+    const cols = Array.isArray(seriesCols) ? seriesCols : [seriesCols];
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return [];
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const legendH = cols.length > 1 ? 28 : 8;
+    const labelBottom = Math.min(
+      CHART_BAND_BOTTOM,
+      Math.max(80, Math.round(CHART_MAX_HEIGHT * 0.28))
+    );
+    const baseHeight = Math.max(
+      220,
+      56 * keys.length + labelBottom + legendH + 24
+    );
+    const height = Math.min(CHART_MAX_HEIGHT, baseHeight);
+    canvas.style.height = `${height}px`;
+    canvas.width = Math.max(1, Math.floor(width * dpr));
+    canvas.height = Math.max(1, Math.floor(height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const labels = keys.map((key) => propertyChartLabel(rowForKey(key), key));
+    const titles = keys.map((key) => propertyChartTitle(rowForKey(key), key));
+    const colLabels = COLUMN_LABELS();
+    const hits = [];
+
+    const pad = {
+      top: legendH,
+      right: 16,
+      bottom: height - labelBottom,
+      left: CHART_PAD_LEFT,
+    };
+    const plotW = width - pad.left - pad.right;
+    const plotH = pad.bottom - pad.top;
+    if (plotW <= 0 || plotH <= 0) return hits;
+
+    const series = cols.map((col, si) => ({
+      col,
+      si,
+      color: CHART_COLORS[si % CHART_COLORS.length],
+      values: keys.map((key) =>
+        HSCompare.numericValueForColumn(rowForKey(key), col)
+      ),
+      columnLabel:
+        colLabels[col] || HSCompare.columnLabel(col, data.settings),
+    }));
+
+    const plotted = series.flatMap((s) => s.values).filter((v) => v != null);
+    const dataMax = plotted.length ? Math.max(...plotted) : 0;
+    const { yMax, ticks } = HSCompare.computeChartYAxis(dataMax, 5);
+
+    if (series.length > 1) {
+      let legendX = pad.left;
+      ctx.font = "11px Segoe UI, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      for (const s of series) {
+        ctx.fillStyle = s.color;
+        ctx.fillRect(legendX, 10, 10, 10);
+        ctx.fillStyle = "#1a2332";
+        ctx.fillText(s.columnLabel, legendX + 14, 15);
+        legendX += ctx.measureText(s.columnLabel).width + 34;
+      }
+    }
+
+    ctx.strokeStyle = "#dde4ec";
+    ctx.fillStyle = "#5c6b7a";
+    ctx.font = "11px Segoe UI, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (const t of ticks) {
+      const y = pad.bottom - (t / yMax) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(pad.left + plotW, y);
+      ctx.stroke();
+      const axisCol = cols.length === 1 ? cols[0] : null;
+      ctx.fillText(HSCompare.formatChartAxisTick(axisCol, t), pad.left - 12, y);
+    }
+
+    const groupCount = keys.length;
+    const seriesCount = series.length;
+    const groupGap = 12;
+    const barGap = 3;
+    const groupWidth = plotW / Math.max(groupCount, 1);
+    const innerW = groupWidth - groupGap;
+    const barWidth = Math.max(
+      4,
+      (innerW - barGap * (seriesCount - 1)) / seriesCount
+    );
+
+    keys.forEach((key, gi) => {
+      const gx = pad.left + gi * groupWidth + groupGap / 2;
+      series.forEach((s) => {
+        const v = s.values[gi];
+        if (v == null || !Number.isFinite(v)) return;
+        const barH = (v / yMax) * plotH;
+        const x = gx + s.si * (barWidth + barGap);
+        const y = pad.bottom - barH;
+        const isHover =
+          hoverHit && hoverHit.col === s.col && hoverHit.gi === gi;
+        ctx.fillStyle = s.color;
+        ctx.globalAlpha = isHover ? 1 : 0.88;
+        ctx.fillRect(x, y, barWidth, barH);
+        ctx.globalAlpha = 1;
+        if (isHover) {
+          ctx.strokeStyle = "#1a2332";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 0.5, y + 0.5, barWidth - 1, barH - 1);
+        }
+        hits.push({
+          x,
+          y,
+          w: barWidth,
+          h: barH,
+          col: s.col,
+          gi,
+          propertyName: titles[gi],
+          columnLabel: s.columnLabel,
+          displayValue: HSCompare.formatChartTooltipValue(s.col, v),
+        });
+      });
+    });
+
+    ctx.fillStyle = "#1a2332";
+    ctx.font = "10px Segoe UI, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    labels.forEach((label, gi) => {
+      const cx = pad.left + gi * groupWidth + groupWidth / 2;
+      const cy = pad.bottom + 22;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-0.55);
+      const text = label.length > 32 ? `${label.slice(0, 30)}…` : label;
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    });
+
+    return hits;
+  }
+
+  function renderCharts(options = {}) {
+    const refreshPicker = options.refreshPicker !== false;
+    const canvas = document.getElementById("compare-chart");
+    const emptyEl = document.getElementById("chart-empty");
+    const scopeCb = document.getElementById("chart-selected-only");
+    if (!canvas || !emptyEl) return;
+    ensureChartSettings();
+    if (scopeCb) scopeCb.checked = !!data.settings.chartSelectedOnly;
+
+    if (refreshPicker) renderChartColumnPicker();
+
+    const validChartable = new Set(chartableColumnsForPicker());
+    data.settings.chartColumns = (data.settings.chartColumns || []).filter(
+      (c) => validChartable.has(c)
+    );
+
+    const seriesCols = data.settings.chartColumns;
+    const keys = chartPropertyKeys();
+
+    chartHoverHit = null;
+    hideChartTooltip();
+    canvas._chartDraw = null;
+    canvas._chartHits = [];
+
+    if (!seriesCols.length) {
+      canvas.style.display = "none";
+      emptyEl.style.display = "block";
+      emptyEl.textContent = "Select at least one column to chart";
+      return;
+    }
+    if (!keys.length) {
+      canvas.style.display = "none";
+      emptyEl.style.display = "block";
+      emptyEl.textContent = data.settings.chartSelectedOnly
+        ? "Select properties in the table to chart"
+        : "No properties to chart";
+      return;
+    }
+
+    const hasValue = seriesCols.some((col) =>
+      keys.some((key) => {
+        const n = HSCompare.numericValueForColumn(rowForKey(key), col);
+        return n != null && Number.isFinite(n);
+      })
+    );
+    if (!hasValue) {
+      canvas.style.display = "none";
+      emptyEl.style.display = "block";
+      emptyEl.textContent = "No numeric values for the selected columns";
+      return;
+    }
+
+    canvas.style.display = "block";
+    emptyEl.style.display = "none";
+    canvas._chartDraw = { keys, seriesCols };
+    canvas._chartHits = drawComparisonChart(canvas, keys, seriesCols, null);
+  }
+
   function updateExportUi() {
     const n = selectedKeys.size;
     const countEl = document.getElementById("selected-count");
@@ -601,6 +1021,7 @@
       selectAll.checked = all;
       selectAll.indeterminate = some && !all;
     }
+    renderCharts({ refreshPicker: false });
   }
 
   function csvEscape(val) {
@@ -634,7 +1055,9 @@
     }
     const cols = orderedExportCols();
     const labels = COLUMN_LABELS();
-    const header = cols.map((c) => labels[c] || HSCompare.columnLabel(c));
+    const header = cols.map(
+      (c) => labels[c] || HSCompare.columnLabel(c, data.settings)
+    );
     const lines = [header.map(csvEscape).join(",")];
     for (const key of keys) {
       const row = rowForKey(key);
@@ -675,9 +1098,14 @@
         return sortableTh("property", "Property");
       case "map":
         return resizableTh("map", "Map");
+      case "user_notes":
+        return sortableTh("user_notes", "Notes");
       default:
         if (TABLE_COLS().includes(col)) {
-          return sortableTh(col, labels[col] || HSCompare.columnLabel(col));
+          return sortableTh(
+            col,
+            labels[col] || HSCompare.columnLabel(col, data.settings)
+          );
         }
         return "";
     }
@@ -705,6 +1133,8 @@
         return `<td class="col-property">${propLink}</td>`;
       case "map":
         return `<td class="col-map">${maps}</td>`;
+      case "user_notes":
+        return `<td class="col-user_notes">${userNotesInner(key, row)}</td>`;
       default:
         break;
     }
@@ -785,6 +1215,7 @@
       };
     }
     renderColgroup();
+    syncPinnedHeadMarkup();
     bindColumnResize();
     setupColumnHeaderSortable();
   }
@@ -810,13 +1241,125 @@
       rows || `<tr><td colspan="${colSpan}">No properties. Add listings from the extension popup on HouseSigma.</td></tr>`;
     setupSortable();
     updateExportUi();
-    renderColgroup();
+    syncPinnedCompareHeader();
+  }
+
+  function readVisibleFieldsFromForm() {
+    const boxes = document.querySelectorAll(".visible-field-checkbox");
+    const selected = [];
+    boxes.forEach((cb) => {
+      if (cb.checked) selected.push(cb.getAttribute("data-field"));
+    });
+    return selected.filter(Boolean);
+  }
+
+  function setVisibleFieldCheckboxes(ids) {
+    const set = new Set(ids);
+    document.querySelectorAll(".visible-field-checkbox").forEach((cb) => {
+      const id = cb.getAttribute("data-field");
+      cb.checked = set.has(id);
+    });
+  }
+
+  async function saveVisibleFieldsSelection(selected) {
+    if (!selected.length) {
+      toast("Select at least one field for the table", true);
+      return;
+    }
+    data.settings.visibleFields = selected;
+    const stored = await HSCompare.loadAll();
+    stored.settings = {
+      ...HSCompare.defaultSettings(),
+      ...(stored.settings || {}),
+      visibleFields: [...selected],
+    };
+    await HSCompare.saveAll(stored);
+    data.tableColumns = HSCompare.getTableColumns(
+      data.settings,
+      data.properties
+    );
+    data.exportColumns = HSCompare.getExportColumns(
+      data.settings,
+      data.properties
+    );
+    const validOrder = new Set(defaultColumnOrder());
+    data.settings.columnOrder = getColumnOrder().filter((c) =>
+      validOrder.has(c)
+    );
+    renderAll();
+    closeFieldsModal();
+    toast("Column selection saved");
+  }
+
+  function openFieldsModal() {
+    renderFieldPicker();
+    const modal = document.getElementById("fields-modal");
+    if (!modal) return;
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeFieldsModal() {
+    const modal = document.getElementById("fields-modal");
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  function renderFieldPicker() {
+    const summary = document.getElementById("hs-fields-summary");
+    const form = document.getElementById("hs-fields-form");
+    if (!form) return;
+
+    const count = data.urls.length;
+    if (!count) {
+      if (summary) summary.textContent = "";
+      form.innerHTML =
+        '<p class="fields-settings-hint">No properties yet — add one from the HouseSigma listing page.</p>';
+      return;
+    }
+
+    const fields = HSCompare.buildFieldCatalog(data.properties, data.settings);
+    const enabled = new Set(
+      HSCompare.getEnabledVisibleFields(data.settings, data.properties)
+    );
+    const visibleCount = fields.filter((f) => enabled.has(f.id)).length;
+
+    if (summary) {
+      summary.textContent = `${fields.length} fields available · ${visibleCount} shown in table`;
+    }
+
+    if (!fields.length) {
+      form.innerHTML =
+        '<p class="fields-settings-hint">No fields found — refresh the listing on HouseSigma and try again.</p>';
+      return;
+    }
+
+    const groups = {};
+    for (const field of fields) {
+      if (!groups[field.group]) groups[field.group] = [];
+      groups[field.group].push(field);
+    }
+
+    let html = "";
+    for (const [group, groupFields] of Object.entries(groups)) {
+      html += `<div class="extract-fields-group"><h3>${esc(group)}</h3><div class="extract-fields-grid">`;
+      for (const field of groupFields) {
+        const checked = enabled.has(field.id) ? " checked" : "";
+        const filledHint =
+          field.filled > 0 ? ` (${field.filled}/${field.total})` : "";
+        html += `<label class="extract-field-option" title="${esc(field.sample || "No data yet")}"><input type="checkbox" class="visible-field-checkbox" data-field="${esc(field.id)}"${checked} /><span>${esc(field.label)}${esc(filledHint)}</span></label>`;
+      }
+      html += "</div></div>";
+    }
+    form.innerHTML = html;
   }
 
   function renderAll() {
     updateCommuteOpenButton();
     renderTableHead();
     renderTable(data.urls);
+    renderCharts();
     document.getElementById("prop-count").textContent = String(data.urls.length);
     document.getElementById("generated").textContent =
       "Updated " + (data.generated || "—");
@@ -833,10 +1376,32 @@
         ...payload.settings,
         columnWidths: { ...(payload.settings.columnWidths || {}) },
         columnOrder: [...(payload.settings.columnOrder || [])],
+        fieldLabels: { ...(payload.settings.fieldLabels || {}) },
+        visibleFields: payload.settings.visibleFields
+          ? [...payload.settings.visibleFields]
+          : payload.settings.extractFields
+            ? [...payload.settings.extractFields]
+            : null,
+        chartColumns: Array.isArray(payload.settings.chartColumns)
+          ? [...payload.settings.chartColumns]
+          : [],
+        chartSelectedOnly: !!payload.settings.chartSelectedOnly,
       };
     }
     ensureColumnWidths();
     ensureColumnOrder();
+    data.tableColumns = HSCompare.getTableColumns(
+      data.settings,
+      data.properties
+    );
+    data.exportColumns = HSCompare.getExportColumns(
+      data.settings,
+      data.properties
+    );
+    data.columnLabels = {
+      ...HSCompare.COLUMN_LABELS,
+      ...(data.settings.fieldLabels || {}),
+    };
     const valid = new Set(data.urls);
     for (const key of [...selectedKeys]) {
       if (!valid.has(key)) selectedKeys.delete(key);
@@ -847,6 +1412,7 @@
   async function reload() {
     const payload = await HSCompare.buildAppData();
     await applyPayload(payload);
+    await autoFillMissingDriveTimes();
   }
 
   function setupSortable() {
@@ -897,7 +1463,95 @@
     URL.revokeObjectURL(a.href);
   }
 
+  document.getElementById("chart-columns-picker")?.addEventListener("change", (e) => {
+    if (!e.target.classList.contains("chart-column-checkbox")) return;
+    ensureChartSettings();
+    data.settings.chartColumns = readChartColumnsFromPicker();
+    scheduleSaveChartSettings();
+    renderCharts();
+  });
+
+  document.getElementById("chart-selected-only")?.addEventListener("change", (e) => {
+    ensureChartSettings();
+    data.settings.chartSelectedOnly = e.target.checked;
+    scheduleSaveChartSettings();
+    renderCharts();
+  });
+
+  const chartCanvas = document.getElementById("compare-chart");
+  if (chartCanvas && !chartCanvas.dataset.hoverBound) {
+    chartCanvas.dataset.hoverBound = "1";
+    chartCanvas.addEventListener("mousemove", (e) => {
+      const rect = chartCanvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hit = findChartHit(mx, my, chartCanvas._chartHits);
+      if (
+        hit !== chartHoverHit &&
+        (!hit ||
+          !chartHoverHit ||
+          hit.col !== chartHoverHit.col ||
+          hit.gi !== chartHoverHit.gi)
+      ) {
+        chartHoverHit = hit;
+        redrawChartCanvas();
+      }
+      if (hit) {
+        showChartTooltip(hit, e.clientX, e.clientY);
+        chartCanvas.style.cursor = "pointer";
+      } else {
+        hideChartTooltip();
+        chartCanvas.style.cursor = "default";
+      }
+    });
+    chartCanvas.addEventListener("mouseleave", () => {
+      if (chartHoverHit) {
+        chartHoverHit = null;
+        redrawChartCanvas();
+      }
+      hideChartTooltip();
+      chartCanvas.style.cursor = "default";
+    });
+  }
+  if (chartCanvas && typeof ResizeObserver !== "undefined") {
+    const chartResize = new ResizeObserver(() => {
+      if (data.settings.chartColumns?.length) {
+        renderCharts({ refreshPicker: false });
+      }
+    });
+    chartResize.observe(chartCanvas.parentElement || chartCanvas);
+  }
+
   document.getElementById("export-selected-btn").addEventListener("click", exportSelectedCsv);
+
+  document.getElementById("fields-open-btn")?.addEventListener("click", openFieldsModal);
+  document.getElementById("fields-modal-close")?.addEventListener("click", closeFieldsModal);
+  document.getElementById("fields-modal-cancel-btn")?.addEventListener("click", closeFieldsModal);
+  document.getElementById("fields-modal-backdrop")?.addEventListener("click", closeFieldsModal);
+
+  document.getElementById("visible-fields-save-btn")?.addEventListener("click", () => {
+    saveVisibleFieldsSelection(readVisibleFieldsFromForm());
+  });
+
+  document.getElementById("visible-fields-reset-btn")?.addEventListener("click", () => {
+    saveVisibleFieldsSelection([...HSCompare.DEFAULT_EXTRACT_FIELDS]);
+  });
+
+  document.getElementById("visible-fields-select-all-btn")?.addEventListener("click", () => {
+    const ids = HSCompare.allKnownFieldIds(data.properties, data.settings);
+    setVisibleFieldCheckboxes(ids);
+  });
+
+  document.getElementById("visible-fields-select-data-btn")?.addEventListener("click", () => {
+    const ids = HSCompare.buildFieldCatalog(data.properties, data.settings)
+      .filter((f) => f.filled > 0)
+      .map((f) => f.id);
+    if (!ids.length) {
+      toast("No fields with data yet", true);
+      return;
+    }
+    setVisibleFieldCheckboxes(ids);
+  });
 
   document.getElementById("commute-open-btn").addEventListener("click", openCommuteModal);
   document.getElementById("commute-modal-close").addEventListener("click", closeCommuteModal);
@@ -905,10 +1559,12 @@
   document.getElementById("commute-modal-backdrop").addEventListener("click", closeCommuteModal);
 
   document.addEventListener("keydown", (e) => {
-    if (
-      e.key === "Escape" &&
-      document.getElementById("commute-modal")?.classList.contains("is-open")
-    ) {
+    if (e.key !== "Escape") return;
+    if (document.getElementById("fields-modal")?.classList.contains("is-open")) {
+      closeFieldsModal();
+      return;
+    }
+    if (document.getElementById("commute-modal")?.classList.contains("is-open")) {
       closeCommuteModal();
     }
   });
@@ -1036,6 +1692,7 @@
     if (!resizeDrag) return;
     const dx = e.clientX - resizeDrag.startX;
     setColumnWidth(resizeDrag.col, resizeDrag.startW + dx);
+    syncPinnedCompareHeader();
   });
 
   document.addEventListener("mouseup", () => {
@@ -1147,7 +1804,16 @@
   });
 
   bindColumnResize();
+  initPinnedCompareHeader();
   renderTableHead();
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes.properties || changes.urls || changes.settings) {
+      reload();
+    }
+  });
+
   loadSortable()
     .then(() => reload())
     .catch((e) => {

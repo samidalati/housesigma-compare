@@ -340,7 +340,7 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
     );
   }
 
-  return {
+  const row = {
     url: finalUrl,
     photo: photoUrl,
     address,
@@ -377,4 +377,16 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
     user_notes: "",
     _coords: lat != null && lon != null ? [lat, lon] : null,
   };
+
+  if (HSCompare.extractAllRespFields) {
+    const { values, labels } = HSCompare.extractAllRespFields(resp);
+    for (const [key, val] of Object.entries(values)) {
+      if (row[key] === undefined || row[key] === "") row[key] = val;
+    }
+    for (const id of Object.keys(labels)) {
+      if (row[id] === undefined) row[id] = values[id] ?? "";
+    }
+  }
+
+  return row;
 };

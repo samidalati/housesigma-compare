@@ -9,6 +9,11 @@ HSCompare.defaultSettings = function defaultSettings() {
     officeCoords: null,
     columnWidths: {},
     columnOrder: [],
+    chartColumns: [],
+    chartSelectedOnly: false,
+    extractFields: null,
+    visibleFields: null,
+    fieldLabels: {},
   };
 };
 
@@ -42,7 +47,7 @@ HSCompare.findDuplicateUrl = function findDuplicateUrl(urls, url) {
   return urls.includes(key) ? key : null;
 };
 
-HSCompare.addProperty = async function addProperty(url, row) {
+HSCompare.addProperty = async function addProperty(url, row, fieldLabels) {
   const data = await HSCompare.loadAll();
   const key = HSCompare.normalizeUrl(url);
   row.url = key;
@@ -56,6 +61,12 @@ HSCompare.addProperty = async function addProperty(url, row) {
       error: `Address already saved: ${dup[1].address || dup[0]}`,
     };
   }
+  if (fieldLabels && Object.keys(fieldLabels).length) {
+    data.settings.fieldLabels = HSCompare.mergeFieldLabels(
+      data.settings,
+      fieldLabels
+    );
+  }
   data.properties[key] = {
     ...row,
     url: key,
@@ -68,7 +79,11 @@ HSCompare.addProperty = async function addProperty(url, row) {
   return { ok: true, url: key, count: data.urls.length };
 };
 
-HSCompare.refreshProperty = async function refreshProperty(urlKey, row) {
+HSCompare.refreshProperty = async function refreshProperty(
+  urlKey,
+  row,
+  fieldLabels
+) {
   const data = await HSCompare.loadAll();
   const oldKey = HSCompare.resolveStoredUrlKey(data.urls, urlKey);
   if (!oldKey || !data.properties[oldKey]) {
@@ -86,6 +101,12 @@ HSCompare.refreshProperty = async function refreshProperty(urlKey, row) {
   if (newKey !== oldKey) {
     data.urls = data.urls.map((u) => (u === oldKey ? newKey : u));
     delete data.properties[oldKey];
+  }
+  if (fieldLabels && Object.keys(fieldLabels).length) {
+    data.settings.fieldLabels = HSCompare.mergeFieldLabels(
+      data.settings,
+      fieldLabels
+    );
   }
   data.properties[newKey] = { ...prev, ...row, viewed, score, user_notes };
   await HSCompare.saveAll(data);
@@ -280,8 +301,11 @@ HSCompare.buildAppData = async function buildAppData() {
     urls: data.urls,
     properties,
     settings: data.settings,
-    tableColumns: HSCompare.TABLE_COLUMNS,
-    exportColumns: HSCompare.EXPORT_COLUMNS,
-    columnLabels: HSCompare.COLUMN_LABELS,
+    tableColumns: HSCompare.getTableColumns(data.settings, properties),
+    exportColumns: HSCompare.getExportColumns(data.settings, properties),
+    columnLabels: {
+      ...HSCompare.COLUMN_LABELS,
+      ...(data.settings.fieldLabels || {}),
+    },
   };
 };

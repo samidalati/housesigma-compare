@@ -7,36 +7,66 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      width: 320px;
+      width: 300px;
       font-family: "Segoe UI", system-ui, sans-serif;
       background: #f0f4f8;
       color: #1a2332;
     }
-    .wrap { padding: 14px; }
-    h1 {
-      margin: 0 0 4px;
-      font-size: 1.05rem;
-      color: #0d6e6e;
+    .wrap {
+      padding: 12px 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .meta { font-size: 0.8rem; color: #5c6b7a; margin-bottom: 6px; }
+    .head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0d6e6e;
+      line-height: 1.2;
+    }
+    .meta {
+      margin: 0;
+      font-size: 0.75rem;
+      color: #5c6b7a;
+      white-space: nowrap;
+    }
     .hint {
+      margin: 0;
       font-size: 0.8rem;
       color: #5c6b7a;
-      margin: 0 0 12px;
       line-height: 1.35;
-      min-height: 2.2em;
     }
     .hint.saved { color: #0d6e6e; font-weight: 600; }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .actions-divider {
+      height: 1px;
+      margin: 2px 0;
+      background: #d8e2ec;
+      border: none;
+    }
     .btn {
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 100%;
-      margin-bottom: 8px;
-      padding: 10px 12px;
+      padding: 9px 12px;
       border: none;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       font-weight: 600;
       cursor: pointer;
+      line-height: 1.2;
     }
     .btn-primary { background: #0d6e6e; color: #fff; }
     .btn-primary:hover { background: #0a5555; }
@@ -48,11 +78,11 @@
     }
     .btn-secondary:hover { background: #e8f4f4; }
     .status {
-      margin-top: 10px;
-      font-size: 0.82rem;
-      min-height: 2.5em;
+      margin: 0;
+      font-size: 0.8rem;
       line-height: 1.35;
     }
+    .status:empty { display: none; }
     .status.err { color: #c0392b; }
     .status.ok { color: #0d6e6e; }
     .spinner {
@@ -64,7 +94,7 @@
       border-right-color: transparent;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
-      vertical-align: middle;
+      flex-shrink: 0;
     }
     .btn.is-loading .spinner { display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -72,22 +102,21 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>HouseSigma Compare</h1>
-    <p class="meta"><span id="count">0</span> properties saved</p>
+    <div class="head">
+      <h1>HouseSigma Compare</h1>
+      <p class="meta"><span id="count">0</span> saved</p>
+    </div>
     <p class="hint" id="hint">Open a HouseSigma listing page.</p>
-    <div id="actions">
-      <button type="button" class="btn btn-primary" id="refresh-btn">
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="property-btn" disabled>
         <span class="spinner" aria-hidden="true"></span>
-        Refresh current property
+        <span id="property-btn-label">Add current property</span>
       </button>
-      <button type="button" class="btn btn-secondary" id="add-btn">
-        <span class="spinner" aria-hidden="true"></span>
-        Add current property
+      <hr class="actions-divider" aria-hidden="true">
+      <button type="button" class="btn btn-secondary" id="open-compare-btn">
+        Open comparison table
       </button>
     </div>
-    <button type="button" class="btn btn-secondary" id="open-compare-btn">
-      Open comparison table
-    </button>
     <p class="status" id="status" role="status"></p>
   </div>
   <script src="lib/fields.js"></script>

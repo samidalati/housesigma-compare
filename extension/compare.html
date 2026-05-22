@@ -48,6 +48,51 @@
     </div>
   </div>
 
+  <div id="fields-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="fields-modal-backdrop"></div>
+    <div
+      class="modal-dialog modal-dialog--fields"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fields-modal-title"
+    >
+      <button
+        type="button"
+        class="modal-close"
+        id="fields-modal-close"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <h2 id="fields-modal-title">Table columns</h2>
+      <p class="fields-settings-hint">
+        All fields are pulled when you add or refresh. Check the ones to show in the
+        comparison table. Viewed, Score, and Notes are always shown.
+      </p>
+      <p class="hs-fields-summary" id="hs-fields-summary"></p>
+      <div class="fields-modal-body">
+        <div id="hs-fields-form" class="extract-fields-form"></div>
+      </div>
+      <div class="fields-settings-actions fields-modal-actions">
+        <button type="button" class="btn btn-backup" id="visible-fields-select-data-btn">
+          Select with data
+        </button>
+        <button type="button" class="btn btn-backup" id="visible-fields-select-all-btn">
+          Select all
+        </button>
+        <button type="button" class="btn btn-backup" id="visible-fields-reset-btn">
+          Reset to defaults
+        </button>
+        <button type="button" class="btn btn-modal-cancel" id="fields-modal-cancel-btn">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-commute-save" id="visible-fields-save-btn">
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="page">
     <header class="hero">
       <h1>HouseSigma Comparison</h1>
@@ -57,10 +102,31 @@
       </p>
     </header>
 
-    <section class="panel">
+    <section class="panel panel--table">
       <div class="table-toolbar">
         <h2>Comparison table</h2>
         <span class="selected-meta" id="selected-count">0 selected</span>
+        <button
+          type="button"
+          class="btn btn-fields-open"
+          id="fields-open-btn"
+          title="Choose table columns"
+          aria-label="Choose table columns"
+        >
+          <svg
+            class="btn-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 512 512"
+            width="18"
+            height="18"
+            aria-hidden="true"
+          >
+            <path
+              fill="currentColor"
+              d="M352 352c0 70.7-57.3 128-128 128s-128-57.3-128-128 57.3-128 128-128 128 57.3 128 128zM512 160c0 17.7-14.3 32-32 32l-64 0c-17.7 0-32-14.3-32-32s14.3-32 32-32l64 0c17.7 0 32 14.3 32 32zM0 160c0-17.7 14.3-32 32-32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-17.7 0-32-14.3-32-32zM352 96c0 17.7-14.3 32-32 32l-64 0c-17.7 0-32-14.3-32-32s14.3-32 32-32l64 0c17.7 0 32 14.3 32 32zM192 352c0 17.7-14.3 32-32 32l-64 0c-17.7 0-32-14.3-32-32s14.3-32 32-32l64 0c-17.7 0 32 14.3 32 32z"
+            />
+          </svg>
+        </button>
         <button type="button" class="btn btn-commute-open" id="commute-open-btn">
           Commute
         </button>
@@ -71,6 +137,16 @@
           Export
         </button>
       </div>
+      <div id="compare-head-pin" class="compare-head-pin" aria-hidden="true">
+        <div class="compare-head-pin-inner">
+          <table class="compare-table compare-table--head-pin">
+            <colgroup id="compare-cols-pin"></colgroup>
+            <thead>
+              <tr id="compare-head-pin-row"></tr>
+            </thead>
+          </table>
+        </div>
+      </div>
       <div class="table-wrap">
         <table id="compare-table" class="compare-table">
           <colgroup id="compare-cols"></colgroup>
@@ -79,6 +155,29 @@
           </thead>
           <tbody id="compare-body"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section class="panel charts-panel">
+      <div class="charts-toolbar">
+        <h2>Charts</h2>
+        <label class="chart-scope-label">
+          <input type="checkbox" id="chart-selected-only" />
+          Selected properties only
+        </label>
+      </div>
+      <div class="charts-body">
+        <p class="charts-hint">
+          Choose one or more numeric columns to compare across properties. Multiple
+          columns appear as colored series on the same chart. Uses the same fields
+          shown in the table above.
+        </p>
+        <div class="chart-columns-picker" id="chart-columns-picker"></div>
+        <div class="chart-wrap">
+          <canvas id="compare-chart" role="img" aria-label="Property comparison chart"></canvas>
+          <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+          <p class="chart-empty" id="chart-empty">Select at least one column to chart</p>
+        </div>
       </div>
     </section>
 
@@ -96,6 +195,7 @@
     </section>
   </div>
   <script src="lib/fields.js"></script>
+  <script src="lib/chart-value.js"></script>
   <script src="lib/normalize.js"></script>
   <script src="lib/commute.js"></script>
   <script src="lib/storage.js"></script>

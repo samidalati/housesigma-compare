@@ -16,7 +16,7 @@ Save HouseSigma listings while you browse (logged in normally), then open a comp
 
 1. Log into [HouseSigma](https://housesigma.com) in Chrome as usual.
 2. Open a **property listing** page (URL contains `/home/`).
-3. Click the extension icon → **Add current property**.
+3. Click the extension icon → **Add current property** (or **Refresh current property** if it is already saved).
 4. Repeat for other listings.
 5. Click **Open comparison table** to review, reorder, export CSV, or backup JSON.
 
@@ -24,10 +24,14 @@ Save HouseSigma listings while you browse (logged in normally), then open a comp
 
 1. Open the listing on HouseSigma (logged in, page fully loaded).
 2. Click the extension icon.
-3. If it says **In your list: …**, click **Refresh current property** (green button).
-4. Data updates in place; **Viewed** stays checked.
+3. If it says **In your list: …**, the main button reads **Refresh current property** — click it to update data in place (**Viewed** stays checked).
+4. If the listing is not saved yet, the same button reads **Add current property**.
 
-If the property is not saved yet, use **Add current property** first.
+### Fields from HouseSigma
+
+When you **add** or **refresh** a property, the extension pulls all listing fields it can read from HouseSigma. Click the **sliders** button above the table to choose which columns to show, then **Save**. Use **Select with data**, **Select all**, or **Reset to defaults** as shortcuts. **Viewed**, **Score**, and **Notes** are always in the table.
+
+Re-**refresh** existing saved properties once to backfill extra fields if they were added before this behavior.
 
 ### Comparison table
 
@@ -43,8 +47,10 @@ If the property is not saved yet, use **Add current property** first.
 - **Sort** — click a column header to sort; click again to reverse.
 - **Column width** — drag the right edge of a header to resize; double-click the edge to fit content (within min/max limits). Widths are saved.
 - **Column order** — drag a header (hold briefly, then drag) to reorder columns; order is saved.
+- **Sticky header** — column headers stay visible at the top while you scroll down the page.
 - **Delete** — removes selected properties from the list.
 - **Export** — CSV for selected rows only.
+- **Charts** — pick numeric columns below the table to compare values across properties (all rows or **Selected properties only**). Multiple columns plot as series on one chart. Choices are saved.
 - **Highlight rules** (red text): Low Income > 10%, Renters > 30%, Households With Children < 40%, Avg Household Income < $100k.
 - **Commute destination** — set work/home address; **Transit** and **Drive** update for all rows (~1 s per property for drive). Use the refresh icon in **Drive** to recalculate one row.
 
@@ -88,6 +94,8 @@ extension/
   page-extract.js     # page world — Pinia + API
   lib/
     fields.js
+    discover-fields.js
+    chart-value.js
     normalize.js
     storage.js
     commute.js

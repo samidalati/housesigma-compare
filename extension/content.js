@@ -6,7 +6,7 @@
 const EXT_SOURCE = "hs-compare-extension";
 const PAGE_SOURCE = "hs-compare-page";
 
-function waitForExtract(timeoutMs) {
+function waitForPageAction(action, timeoutMs) {
   return new Promise((resolve, reject) => {
     function cleanup() {
       clearTimeout(timer);
@@ -39,8 +39,12 @@ function waitForExtract(timeoutMs) {
     }
 
     window.addEventListener("message", onMessage);
-    window.postMessage({ source: EXT_SOURCE, action: "extract" }, "*");
+    window.postMessage({ source: EXT_SOURCE, action }, "*");
   });
+}
+
+function waitForExtract(timeoutMs) {
+  return waitForPageAction("extract", timeoutMs);
 }
 
 async function getOfficeCoords() {
@@ -83,8 +87,11 @@ async function extractProperty() {
   try {
     raw.officeCoords = await getOfficeCoords();
     const row = HSCompare.buildPropertyRow(raw, raw.pageUrl || location.href);
+    const fieldLabels = HSCompare.extractAllRespFields
+      ? HSCompare.extractAllRespFields(raw.resp).labels
+      : {};
     delete row._coords;
-    return { ok: true, row, coords: raw.resp?.house?.map };
+    return { ok: true, row, coords: raw.resp?.house?.map, fieldLabels };
   } catch (e) {
     return { ok: false, error: "Failed to build property row: " + (e.message || e) };
   }
@@ -107,6 +114,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse(await extractProperty());
         return;
       }
+      if (msg.action === "discoverFields") {
+        let raw;
+        try {
+          raw = await waitForPageAction("extract", 25000);
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e.message || e) });
+          return;
+        }
+        if (!raw.ok) {
+          sendResponse(raw);
+          return;
+        }
+        if (!raw.resp?.house) {
+          sendResponse({
+            ok: false,
+            error: "Listing data was empty — open a property page and wait for it to load.",
+          });
+          return;
+        }
+        sendResponse({
+          ok: true,
+          fields: HSCompare.discoverListingFields(raw.resp),
+          pageUrl: raw.pageUrl || location.href,
+        });
+        return;
+      }
       if (msg.action === "add") {
         const extracted = await extractProperty();
         if (!extracted.ok) {
@@ -115,7 +148,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         const result = await HSCompare.addProperty(
           extracted.row.url,
-          extracted.row
+          extracted.row,
+          extracted.fieldLabels
         );
         sendResponse(result);
         return;

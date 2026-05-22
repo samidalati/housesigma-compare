@@ -3,25 +3,35 @@
 const statusEl = document.getElementById("status");
 const countEl = document.getElementById("count");
 const hintEl = document.getElementById("hint");
-const actionsEl = document.getElementById("actions");
-const addBtn = document.getElementById("add-btn");
-const refreshBtn = document.getElementById("refresh-btn");
+const propertyBtn = document.getElementById("property-btn");
+const propertyBtnLabel = document.getElementById("property-btn-label");
 const openBtn = document.getElementById("open-compare-btn");
+
+/** @type {string | null} */
+let currentSavedKey = null;
+let propertyBtnEnabled = false;
+
+function isHouseSigmaUrl(url) {
+  if (!url) return false;
+  try {
+    const { protocol, hostname } = new URL(url);
+    return (
+      protocol === "https:" &&
+      (hostname === "housesigma.com" || hostname === "www.housesigma.com")
+    );
+  } catch (_) {
+    return false;
+  }
+}
 
 function setStatus(msg, isError) {
   statusEl.textContent = msg || "";
   statusEl.className = "status" + (msg ? (isError ? " err" : " ok") : "");
 }
 
-function setBtnLoading(btn, loading) {
-  if (!btn) return;
-  btn.disabled = loading;
-  btn.classList.toggle("is-loading", loading);
-}
-
-function setActionsLoading(loading) {
-  setBtnLoading(addBtn, loading);
-  setBtnLoading(refreshBtn, loading);
+function setPropertyBtnLoading(loading) {
+  propertyBtn.disabled = loading || !propertyBtnEnabled;
+  propertyBtn.classList.toggle("is-loading", loading);
 }
 
 async function refreshCount() {
@@ -43,7 +53,7 @@ async function sendToTab(tabId, message) {
 }
 
 function savedKeyForTabUrl(tabUrl, urls, properties) {
-  if (!tabUrl || !/housesigma\.com/i.test(tabUrl)) return null;
+  if (!tabUrl || !isHouseSigmaUrl(tabUrl)) return null;
   const bare = tabUrl.split("#")[0];
   try {
     const norm = HSCompare.normalizeUrl(bare);
@@ -57,84 +67,70 @@ function savedKeyForTabUrl(tabUrl, urls, properties) {
 async function updatePopupUi() {
   const data = await HSCompare.loadAll();
   const tab = await getActiveTab();
-  const savedKey = savedKeyForTabUrl(tab?.url, data.urls, data.properties);
+  const onHouseSigma = isHouseSigmaUrl(tab?.url);
+  propertyBtnEnabled = onHouseSigma;
+  propertyBtn.disabled = !onHouseSigma;
+  currentSavedKey = savedKeyForTabUrl(tab?.url, data.urls, data.properties);
 
-  if (savedKey) {
-    const row = data.properties[savedKey] || {};
+  if (!onHouseSigma) {
+    hintEl.textContent = "Open a page on housesigma.com in this tab.";
+    hintEl.className = "hint";
+    propertyBtnLabel.textContent = "Add current property";
+  } else if (currentSavedKey) {
+    const row = data.properties[currentSavedKey] || {};
     hintEl.textContent = `In your list: ${row.address || "this property"}`;
     hintEl.className = "hint saved";
-    refreshBtn.className = "btn btn-primary";
-    addBtn.className = "btn btn-secondary";
-    actionsEl.insertBefore(refreshBtn, addBtn);
-  } else if (tab?.url && /housesigma\.com/i.test(tab.url)) {
-    hintEl.textContent = "Not saved yet — use Add, or open another listing.";
-    hintEl.className = "hint";
-    addBtn.className = "btn btn-primary";
-    refreshBtn.className = "btn btn-secondary";
-    actionsEl.insertBefore(addBtn, refreshBtn);
+    propertyBtnLabel.textContent = "Refresh current property";
   } else {
-    hintEl.textContent = "Open a HouseSigma listing page in this tab.";
+    hintEl.textContent = "Not saved yet — click below to add.";
     hintEl.className = "hint";
-    addBtn.className = "btn btn-primary";
-    refreshBtn.className = "btn btn-secondary";
-    actionsEl.insertBefore(addBtn, refreshBtn);
+    propertyBtnLabel.textContent = "Add current property";
+  }
+  propertyBtn.className = "btn btn-primary";
+}
+
+async function addCurrentProperty(tab) {
+  const res = await sendToTab(tab.id, { action: "add" });
+  if (res?.ok) {
+    setStatus("Added to comparison.");
+    await refreshCount();
+    await updatePopupUi();
+  } else {
+    setStatus(res?.error || "Could not add property.", true);
   }
 }
 
-addBtn.addEventListener("click", async () => {
-  setStatus("");
-  const tab = await getActiveTab();
-  if (!tab?.id || !/housesigma\.com/i.test(tab.url || "")) {
-    setStatus("Open a HouseSigma listing page in this tab first.", true);
+async function refreshCurrentProperty(tab, savedKey) {
+  const extracted = await sendToTab(tab.id, { action: "extract" });
+  if (!extracted?.ok) {
+    setStatus(extracted?.error || "Could not read listing.", true);
     return;
   }
-  setActionsLoading(true);
-  try {
-    const res = await sendToTab(tab.id, { action: "add" });
-    if (res?.ok) {
-      setStatus("Added to comparison.");
-      await refreshCount();
-      await updatePopupUi();
-    } else {
-      setStatus(res?.error || "Could not add property.", true);
-    }
-  } catch (e) {
-    setStatus(
-      "Reload the listing page, then try again. " + (e.message || e),
-      true
-    );
-  } finally {
-    setActionsLoading(false);
+  const res = await HSCompare.refreshProperty(
+    savedKey,
+    extracted.row,
+    extracted.fieldLabels
+  );
+  if (res?.ok) {
+    setStatus(res.address ? `Refreshed: ${res.address}` : "Refreshed.");
+    await refreshCount();
+    await updatePopupUi();
+  } else {
+    setStatus(res?.error || "Refresh failed.", true);
   }
-});
+}
 
-refreshBtn.addEventListener("click", async () => {
+propertyBtn.addEventListener("click", async () => {
   setStatus("");
   const tab = await getActiveTab();
-  if (!tab?.id || !/housesigma\.com/i.test(tab.url || "")) {
-    setStatus("Open the property listing tab on HouseSigma first.", true);
-    return;
-  }
-  const data = await HSCompare.loadAll();
-  const savedKey = savedKeyForTabUrl(tab.url, data.urls, data.properties);
-  if (!savedKey) {
-    setStatus("Not in your list yet — use Add current property first.", true);
-    return;
-  }
-  setActionsLoading(true);
+  if (!tab?.id || !propertyBtnEnabled) return;
+
+  setPropertyBtnLoading(true);
   try {
-    const extracted = await sendToTab(tab.id, { action: "extract" });
-    if (!extracted?.ok) {
-      setStatus(extracted?.error || "Could not read listing.", true);
-      return;
-    }
-    const res = await HSCompare.refreshProperty(savedKey, extracted.row);
-    if (res?.ok) {
-      setStatus(res.address ? `Refreshed: ${res.address}` : "Refreshed.");
-      await refreshCount();
-      await updatePopupUi();
+    if (currentSavedKey) {
+      await refreshCurrentProperty(tab, currentSavedKey);
     } else {
-      setStatus(res?.error || "Refresh failed.", true);
+      await addCurrentProperty(tab);
     }
   } catch (e) {
     setStatus(
@@ -142,7 +138,7 @@ refreshBtn.addEventListener("click", async () => {
       true
     );
   } finally {
-    setActionsLoading(false);
+    setPropertyBtnLoading(false);
   }
 });
 
