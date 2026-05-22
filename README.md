@@ -79,6 +79,19 @@ Everything is stored locally in `chrome.storage.local` on your machine. Nothing 
 | Sold history empty | Confirm MLS/board login on the listing in HouseSigma (same as the website). |
 | Duplicate address | Same street address already saved — delete the old row or use a different listing. |
 
+## Publish on the Chrome Web Store
+
+To ship a **public** listing:
+
+1. Follow [docs/PUBLISHING.md](docs/PUBLISHING.md) (developer account, ZIP upload, review).
+2. Host the privacy policy: enable GitHub Pages from `/docs` and use `docs/privacy.html` (see [docs/PRIVACY.md](docs/PRIVACY.md)).
+3. Copy store text from [docs/STORE_LISTING.md](docs/STORE_LISTING.md).
+4. Build the upload package: `./scripts/build-extension-zip.sh` → `dist/housesigma-compare.zip`.
+
+After approval, add your public store URL here:
+
+`<!-- Chrome Web Store: https://chromewebstore.google.com/detail/... -->`
+
 ## Development
 
 This extension ports logic from the older Python tool at `serversetup/tools/housesigma_compare/` (reference only). The extension repo is the product going forward.
@@ -100,6 +113,10 @@ extension/
     storage.js
     commute.js
   icons/              # PNGs from Font Awesome [house](https://fontawesome.com/icons/classic/solid/house) (CC BY 4.0)
+  vendor/             # Sortable.min.js for row/column reorder
+```
+
+Scripts: `scripts/generate-icons.sh`, `scripts/fetch-vendor.sh`, `scripts/build-extension-zip.sh`
 ```
 
 ## License
