@@ -265,6 +265,26 @@ HSCompare.nowIso = function nowIso() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 };
 
+/** HouseSigma key_facts_v2 "Description" (description2); summary bullets if empty. */
+HSCompare.listingDescription = function listingDescription(keyFacts) {
+  const kf = keyFacts || {};
+  const candidates = [kf.description2?.value, kf.description?.value];
+  for (const raw of candidates) {
+    if (raw == null || raw === "") continue;
+    const s = (Array.isArray(raw) ? raw.join("\n") : String(raw)).trim();
+    if (s && !HSCompare.isRedacted(s)) return s;
+  }
+  const summary = kf.summary?.value;
+  if (Array.isArray(summary) && summary.length) {
+    const joined = summary
+      .map((p) => String(p).trim())
+      .filter((p) => p && !HSCompare.isRedacted(p))
+      .join("\n");
+    if (joined) return joined;
+  }
+  return "";
+};
+
 HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
   const resp = raw.resp || {};
   const house = resp.house || {};
@@ -327,6 +347,7 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
     url: finalUrl,
     photo: photoUrl,
     address,
+    description: HSCompare.listingDescription(keyFacts),
     google_maps: HSCompare.googleMapsUrl(house, address),
     viewed: false,
     listed_price: house.price ?? "",

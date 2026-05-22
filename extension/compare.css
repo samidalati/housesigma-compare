@@ -82,6 +82,110 @@ header.hero p {
   font-size: 0.8rem;
   color: var(--muted);
 }
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal.is-open {
+  display: flex;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 35, 50, 0.45);
+}
+.modal-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(26, 35, 50, 0.2);
+  padding: 1.25rem 1.25rem 1rem;
+}
+.modal-dialog h2 {
+  margin: 0 2rem 0.5rem 0;
+  font-size: 1.1rem;
+}
+.modal-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+}
+.modal-close:hover {
+  color: var(--text);
+  background: #f0f4f8;
+}
+.commute-form {
+  margin-top: 0.75rem;
+}
+.commute-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.commute-form input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+.commute-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.commute-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.btn-modal-cancel {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-modal-cancel:hover {
+  background: #f7fafc;
+}
+.btn-commute-save {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn-commute-save:hover {
+  background: var(--accent-hover);
+}
+.btn-commute-open {
+  background: #fff;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+.btn-commute-open:hover {
+  background: #e8f4f4;
+}
+.commute-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
 .btn-backup {
   background: #fff;
   color: var(--text);
@@ -185,6 +289,25 @@ th {
   font-weight: 600;
   white-space: nowrap;
 }
+th.col-property,
+td.col-property,
+th.col-address,
+td.col-address {
+  min-width: 10rem;
+  max-width: 16rem;
+  white-space: normal;
+  word-break: break-word;
+}
+th.col-description,
+td.col-description {
+  min-width: 25.2rem;
+  max-width: 39.2rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text, #1a2332);
+}
 th.col-lot_size,
 td.col-lot_size {
   min-width: 11rem;
@@ -267,11 +390,24 @@ tr.compare-row:hover {
   color: var(--muted);
   display: flex;
 }
+.photo-link {
+  display: inline-block;
+  line-height: 0;
+  border-radius: 6px;
+}
+.photo-link:hover .listing-photo {
+  opacity: 0.92;
+}
+.photo-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .listing-photo {
   max-width: 120px;
   max-height: 90px;
   border-radius: 6px;
   object-fit: cover;
+  display: block;
 }
 .no-photo {
   color: var(--muted);

@@ -34,9 +34,10 @@ If the property is not saved yet, use **Add current property** first.
 - **Viewed** checkbox — persisted in extension storage.
 - **Drag** rows to reorder.
 - **Delete** removes a property from the list.
-- **Export selected CSV** — only checked rows.
+- **Export** — only checked rows.
 - **Highlight rules** (red text): Low Income > 10%, Renters > 30%, Households With Children < 40%, Avg Household Income < $100k.
-- **Drive to office** — if empty, click the refresh icon in that cell to calculate via OSRM (office default: 171 E Liberty St, Toronto).
+- **Commute destination** — toolbar button opens a popup to set your work/home address; **Transit** and **Drive** update for all rows (about one second per property for drive). Use the refresh icon in **Drive** to recalculate a single row.
+- Column headers: **Drive** and **Transit** (not “to office”).
 - **Transit** column — Google Maps transit directions link (open in browser).
 
 ### Backup

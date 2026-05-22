@@ -8,7 +8,7 @@ HSCompare.NOMINATIM_UA =
   "housesigma-compare-extension/1.0 (personal property comparison)";
 
 HSCompare.geocodeOffice = async function geocodeOffice(address) {
-  const q = String(address || HSCompare.DEFAULT_OFFICE_ADDRESS).trim();
+  const q = String(address || "").trim();
   if (!q) return null;
   const url =
     HSCompare.NOMINATIM_URL +
@@ -45,6 +45,119 @@ HSCompare.osrmDriveTime = async function osrmDriveTime(
   return `${mins} min`;
 };
 
+HSCompare.coordsFromRow = function coordsFromRow(row) {
+  const maps = (row && row.google_maps) || "";
+  const m = maps.match(/query=([\d.-]+),([\d.-]+)/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lon = parseFloat(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [lat, lon];
+};
+
+HSCompare.propertyCoords = function propertyCoords(row) {
+  if (row?._coords?.length === 2) return row._coords;
+  return HSCompare.coordsFromRow(row);
+};
+
+/** OSRM public demo — one request per second. */
+HSCompare.OSRM_DELAY_MS = 1100;
+
+HSCompare.computeDriveTimeForRow = async function computeDriveTimeForRow(
+  row,
+  office
+) {
+  const coords = HSCompare.propertyCoords(row);
+  if (!coords || !office) return "";
+  try {
+    return await HSCompare.osrmDriveTime(
+      coords[0],
+      coords[1],
+      office[0],
+      office[1]
+    );
+  } catch (_) {
+    return "";
+  }
+};
+
+/** Fill drive_to_office for listed properties; returns count updated. */
+HSCompare.fillDriveTimesForUrls = async function fillDriveTimesForUrls(
+  properties,
+  urls,
+  office,
+  { force = false } = {}
+) {
+  if (!office) return 0;
+  let updated = 0;
+  for (const u of urls || []) {
+    const row = properties[u];
+    if (!row) continue;
+    if (!force && row.drive_to_office) continue;
+    const coords = HSCompare.propertyCoords(row);
+    if (!coords) continue;
+    const drive = await HSCompare.osrmDriveTime(
+      coords[0],
+      coords[1],
+      office[0],
+      office[1]
+    );
+    if (drive) {
+      row.drive_to_office = drive;
+      updated += 1;
+    }
+    await new Promise((r) => setTimeout(r, HSCompare.OSRM_DELAY_MS));
+  }
+  return updated;
+};
+
+/** Save destination address, geocode, refresh transit and drive for all rows. */
+HSCompare.applyCommuteDestination = async function applyCommuteDestination(
+  address
+) {
+  const trimmed = String(address || "").trim();
+  if (!trimmed) {
+    return { ok: false, error: "Enter an address" };
+  }
+  const data = await HSCompare.loadAll();
+  data.settings.officeAddress = trimmed;
+  data.settings.officeCoords = null;
+  const office = await HSCompare.geocodeOffice(trimmed);
+  if (!office) {
+    return { ok: false, error: "Could not find that address — try a fuller street address" };
+  }
+  data.settings.officeCoords = office;
+  let transitUpdated = 0;
+  for (const u of data.urls) {
+    const row = data.properties[u];
+    if (!row) continue;
+    row.drive_to_office = "";
+    const coords = HSCompare.propertyCoords(row);
+    if (coords) {
+      row.transit_to_office = HSCompare.transitToOfficeUrl(
+        coords[0],
+        coords[1],
+        office[0],
+        office[1]
+      );
+      transitUpdated += 1;
+    }
+  }
+  const driveUpdated = await HSCompare.fillDriveTimesForUrls(
+    data.properties,
+    data.urls,
+    office,
+    { force: true }
+  );
+  await HSCompare.saveAll(data);
+  return {
+    ok: true,
+    officeAddress: trimmed,
+    transitUpdated,
+    driveUpdated,
+  };
+};
+
 HSCompare.fillDriveTimes = async function fillDriveTimes(rows, settings) {
   let office = settings?.officeCoords;
   if (!office) {
@@ -52,20 +165,7 @@ HSCompare.fillDriveTimes = async function fillDriveTimes(rows, settings) {
   }
   if (!office) return rows;
   const out = { ...rows };
-  for (const [key, row] of Object.entries(out)) {
-    if (row.drive_to_office) continue;
-    const coords = row._coords;
-    if (!coords || coords.length !== 2) continue;
-    try {
-      const drive = await HSCompare.osrmDriveTime(
-        coords[0],
-        coords[1],
-        office[0],
-        office[1]
-      );
-      if (drive) row.drive_to_office = drive;
-      await new Promise((r) => setTimeout(r, 1100));
-    } catch (_) {}
-  }
+  const urls = Object.keys(out);
+  await HSCompare.fillDriveTimesForUrls(out, urls, office);
   return out;
 };

@@ -8,38 +8,67 @@
 </head>
 <body>
   <div id="toast"></div>
+
+  <div id="commute-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="commute-modal-backdrop"></div>
+    <div
+      class="modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="commute-modal-title"
+    >
+      <button
+        type="button"
+        class="modal-close"
+        id="commute-modal-close"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <h2 id="commute-modal-title">Commute Destination</h2>
+      <p class="commute-hint" id="commute-hint">
+        Address used for Drive times and Transit direction links.
+      </p>
+      <form id="commute-form" class="commute-form">
+        <label class="commute-label" for="office-address">Address</label>
+        <input
+          type="text"
+          id="office-address"
+          name="officeAddress"
+          placeholder="Street address, city, province"
+          autocomplete="street-address"
+        />
+        <div class="commute-actions">
+          <button type="button" class="btn btn-modal-cancel" id="commute-cancel-btn">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-commute-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="page">
     <header class="hero">
       <h1>HouseSigma Comparison</h1>
       <p>
         <span id="generated">Loading…</span> ·
-        <span id="prop-count">0</span> properties ·
-        Chrome extension (no server)
+        <span id="prop-count">0</span> properties
       </p>
     </header>
-
-    <section class="panel">
-      <h2>Backup</h2>
-      <div class="backup-row">
-        <button type="button" class="btn btn-backup" id="export-backup-btn">Export backup JSON</button>
-        <button type="button" class="btn btn-backup" id="import-backup-btn">Import backup JSON</button>
-        <button type="button" class="btn btn-backup" id="import-merge-btn">Import (merge)</button>
-        <input type="file" id="import-file" accept="application/json,.json" />
-      </div>
-      <p class="backup-hint">
-        Export saves all properties to a file. Import replaces your list; Import (merge) adds without removing existing entries.
-      </p>
-    </section>
 
     <section class="panel">
       <div class="table-toolbar">
         <h2>Comparison table</h2>
         <span class="selected-meta" id="selected-count">0 selected</span>
+        <button type="button" class="btn btn-commute-open" id="commute-open-btn">
+          Commute
+        </button>
         <button type="button" class="btn btn-delete-selected" id="delete-selected-btn" disabled>
-          Delete selected
+          Delete
         </button>
         <button type="button" class="btn btn-export" id="export-selected-btn" disabled>
-          Export selected CSV
+          Export
         </button>
       </div>
       <div class="table-wrap">
@@ -50,6 +79,19 @@
           <tbody id="compare-body"></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="panel">
+      <h2>Backup</h2>
+      <div class="backup-row">
+        <button type="button" class="btn btn-backup" id="export-backup-btn">Export backup</button>
+        <button type="button" class="btn btn-backup" id="import-backup-btn">Import backup</button>
+        <button type="button" class="btn btn-backup" id="import-merge-btn">Import (merge)</button>
+        <input type="file" id="import-file" accept="application/json,.json" />
+      </div>
+      <p class="backup-hint">
+        Export saves all properties to a file. Import replaces your list; Import (merge) adds without removing existing entries.
+      </p>
     </section>
   </div>
   <script src="lib/fields.js"></script>

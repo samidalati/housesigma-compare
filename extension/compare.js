@@ -27,8 +27,6 @@
   };
   const selectedKeys = new Set();
 
-  const ICON_EXTERNAL =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
   const ICON_REFRESH =
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1.1 6.4 2.8L21 8"/><path d="M21 3v5h-5"/></svg>';
   const ICON_GRIP =
@@ -108,13 +106,38 @@
   }
 
   function propertyCoords(row) {
-    const maps = row.google_maps || "";
-    const m = maps.match(/query=([\d.-]+),([\d.-]+)/);
-    if (!m) return null;
-    const lat = parseFloat(m[1]);
-    const lon = parseFloat(m[2]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return [lat, lon];
+    return HSCompare.coordsFromRow(row);
+  }
+
+  function syncCommuteForm() {
+    const input = document.getElementById("office-address");
+    if (!input) return;
+    input.value = data.settings?.officeAddress || "";
+  }
+
+  function updateCommuteOpenButton() {
+    const btn = document.getElementById("commute-open-btn");
+    if (!btn) return;
+    const addr = data.settings?.officeAddress || "";
+    btn.title = addr
+      ? `Drive & Transit destination: ${addr}`
+      : "Set commute destination for Drive & Transit";
+  }
+
+  function openCommuteModal() {
+    syncCommuteForm();
+    const modal = document.getElementById("commute-modal");
+    if (!modal) return;
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    document.getElementById("office-address")?.focus();
+  }
+
+  function closeCommuteModal() {
+    const modal = document.getElementById("commute-modal");
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
   }
 
   async function getOfficeCoords() {
@@ -179,14 +202,18 @@
     }
     return {
       cellClass: "cell-empty col-drive_to_office",
-      inner: `<button type="button" class="btn-drive-refresh" data-url="${urlAttrKey(key)}" title="Calculate drive to office" aria-label="Calculate drive to office">${ICON_REFRESH}</button>`,
+      inner: `<button type="button" class="btn-drive-refresh" data-url="${urlAttrKey(key)}" title="Calculate drive time" aria-label="Calculate drive time">${ICON_REFRESH}</button>`,
     };
   }
 
-  function photoCell(row) {
+  function photoCell(row, key) {
     const src = row.photo || "";
+    const href = esc(row.url || key || "");
     if (!src) return '<span class="no-photo">No photo</span>';
-    return `<img class="listing-photo" src="${esc(src)}" alt="Listing photo" loading="lazy" />`;
+    if (!href) {
+      return `<img class="listing-photo" src="${esc(src)}" alt="Listing photo" loading="lazy" />`;
+    }
+    return `<a class="photo-link" href="${href}" target="_blank" rel="noopener" aria-label="Open listing on HouseSigma"><img class="listing-photo" src="${esc(src)}" alt="Listing photo" loading="lazy" /></a>`;
   }
 
   function selectCell(key) {
@@ -297,7 +324,7 @@
         const row = rowForKey(key);
         if (!row) return "";
         const title = row.address || row.url || key;
-        const propLink = `<a class="property-link" href="${esc(row.url || key)}" target="_blank" rel="noopener">${esc(title)} ${ICON_EXTERNAL}</a>`;
+        const propLink = `<a class="property-link" href="${esc(row.url || key)}" target="_blank" rel="noopener">${esc(title)}</a>`;
         const maps = row.google_maps
           ? `<a class="map-link" href="${esc(row.google_maps)}" target="_blank" rel="noopener">${ICON_MAP}<span>Map</span></a>`
           : '<span class="cell-empty">—</span>';
@@ -306,7 +333,7 @@
           selectCell(key),
           viewedCell(key, row),
           `<td class="col-drag"><span class="drag-handle" title="Drag to reorder">${ICON_GRIP}</span></td>`,
-          `<td class="col-photo">${photoCell(row)}</td>`,
+          `<td class="col-photo">${photoCell(row, key)}</td>`,
           `<td class="col-property">${propLink}</td>`,
           `<td class="col-map">${maps}</td>`,
         ];
@@ -327,7 +354,7 @@
             cellClass = driveCell.cellClass;
             inner = driveCell.inner;
           } else if (col === "transit_to_office" && String(val).startsWith("http")) {
-            inner = `<a class="property-link" href="${esc(val)}" target="_blank" rel="noopener">Plan transit ${ICON_EXTERNAL}</a>`;
+            inner = `<a class="property-link" href="${esc(val)}" target="_blank" rel="noopener">Transit</a>`;
           } else {
             inner = esc(val);
           }
@@ -343,6 +370,7 @@
   }
 
   function renderAll() {
+    updateCommuteOpenButton();
     renderTable(data.urls);
     document.getElementById("prop-count").textContent = String(data.urls.length);
     document.getElementById("generated").textContent =
@@ -415,6 +443,61 @@
   }
 
   document.getElementById("export-selected-btn").addEventListener("click", exportSelectedCsv);
+
+  document.getElementById("commute-open-btn").addEventListener("click", openCommuteModal);
+  document.getElementById("commute-modal-close").addEventListener("click", closeCommuteModal);
+  document.getElementById("commute-cancel-btn").addEventListener("click", closeCommuteModal);
+  document.getElementById("commute-modal-backdrop").addEventListener("click", closeCommuteModal);
+
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "Escape" &&
+      document.getElementById("commute-modal")?.classList.contains("is-open")
+    ) {
+      closeCommuteModal();
+    }
+  });
+
+  document.getElementById("commute-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("office-address");
+    const btn = e.submitter || document.querySelector(".btn-commute-save");
+    const address = (input?.value || "").trim();
+    if (!address) {
+      toast("Enter a destination address", true);
+      return;
+    }
+    if (btn) btn.disabled = true;
+    closeCommuteModal();
+    toast("Saving destination and calculating drive times…");
+    try {
+      const res = await HSCompare.applyCommuteDestination(address);
+      if (res.ok) {
+        await reload();
+        const parts = ["Destination saved."];
+        if (res.driveUpdated > 0) {
+          parts.push(
+            `Drive updated for ${res.driveUpdated} propert${res.driveUpdated === 1 ? "y" : "ies"}.`
+          );
+        }
+        if (res.transitUpdated > 0) {
+          parts.push(
+            `Transit updated for ${res.transitUpdated} propert${res.transitUpdated === 1 ? "y" : "ies"}.`
+          );
+        }
+        if (!res.driveUpdated && !res.transitUpdated) {
+          parts.push("Add properties or refresh listings to get commute times.");
+        }
+        toast(parts.join(" "));
+      } else {
+        toast(res.error || "Could not save destination", true);
+      }
+    } catch (err) {
+      toast(String(err.message || err), true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 
   document
     .getElementById("delete-selected-btn")

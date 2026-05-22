@@ -30,7 +30,7 @@ HSCompare.COLUMNS = [
   "elementary_school",
   "elementary_school_score",
   "scraped_at",
-  "notes",
+  "description",
 ];
 
 HSCompare.TABLE_COLUMNS = HSCompare.COLUMNS.filter(
@@ -44,13 +44,14 @@ HSCompare.EXPORT_COLUMNS = [
 ];
 
 HSCompare.COLUMN_LABELS = {
+  description: "Description",
   bedrooms: "beds",
   bathrooms: "bath",
   lot_size: "Lot Size",
   lot_area: "Lot Area",
   size: "Size",
-  drive_to_office: "Drive to office",
-  transit_to_office: "Transit to office",
+  drive_to_office: "Drive",
+  transit_to_office: "Transit",
   low_income: "Low Income",
   renters: "Renters",
   condos: "Condos",
@@ -66,14 +67,10 @@ HSCompare.COLUMN_LABELS = {
   parking_spots: "Parking",
   days_on_market: "Days on Market",
   scraped_at: "Scraped At",
-  notes: "Notes",
 };
 
 HSCompare.columnLabel = function columnLabel(col) {
   return HSCompare.COLUMN_LABELS[col] || col.replace(/_/g, " ");
 };
-
-HSCompare.DEFAULT_OFFICE_ADDRESS =
-  "171 E Liberty St, Toronto, ON M6K 3E7";
 
 HSCompare.BACKUP_VERSION = 1;

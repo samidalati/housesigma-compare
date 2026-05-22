@@ -5,7 +5,7 @@ const STORAGE_KEYS = ["urls", "properties", "settings"];
 
 HSCompare.defaultSettings = function defaultSettings() {
   return {
-    officeAddress: HSCompare.DEFAULT_OFFICE_ADDRESS,
+    officeAddress: "",
     officeCoords: null,
   };
 };
