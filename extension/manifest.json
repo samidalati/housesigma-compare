@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HouseSigma Compare",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Save HouseSigma listings and compare them in a table — no server required.",
   "icons": {
     "16": "icons/icon16.png",

@@ -31,14 +31,20 @@ If the property is not saved yet, use **Add current property** first.
 
 ### Comparison table
 
-- **Viewed** checkbox — persisted in extension storage.
-- **Drag** rows to reorder.
-- **Delete** removes a property from the list.
-- **Export** — only checked rows.
+- **Drag** handle (first column) — reorder rows manually (clears column sort).
+- **Select** — check rows to export CSV.
+- **Viewed** — persisted checkbox per listing.
+- **Score** — your rating (0–10 dropdown), persisted per listing.
+- **Photo** — fixed-size thumbnail; click to open the HouseSigma listing.
+- **Property** / **Address** — listing link and address.
+- **Map** — Google Maps link.
+- **Description** — from HouseSigma; collapsed with expand control.
+- **Notes** — your notes (up to 1000 characters), saved on blur.
+- **Sort** — click a column header to sort; click again to reverse.
+- **Delete** — removes selected properties from the list.
+- **Export** — CSV for selected rows only.
 - **Highlight rules** (red text): Low Income > 10%, Renters > 30%, Households With Children < 40%, Avg Household Income < $100k.
-- **Commute destination** — toolbar button opens a popup to set your work/home address; **Transit** and **Drive** update for all rows (about one second per property for drive). Use the refresh icon in **Drive** to recalculate a single row.
-- Column headers: **Drive** and **Transit** (not “to office”).
-- **Transit** column — Google Maps transit directions link (open in browser).
+- **Commute destination** — set work/home address; **Transit** and **Drive** update for all rows (~1 s per property for drive). Use the refresh icon in **Drive** to recalculate one row.
 
 ### Backup
 

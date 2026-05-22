@@ -54,7 +54,13 @@ HSCompare.addProperty = async function addProperty(url, row) {
       error: `Address already saved: ${dup[1].address || dup[0]}`,
     };
   }
-  data.properties[key] = { viewed: false, ...row, url: key };
+  data.properties[key] = {
+    ...row,
+    url: key,
+    viewed: false,
+    score: 0,
+    user_notes: "",
+  };
   data.urls.push(key);
   await HSCompare.saveAll(data);
   return { ok: true, url: key, count: data.urls.length };
@@ -66,15 +72,20 @@ HSCompare.refreshProperty = async function refreshProperty(urlKey, row) {
   if (!oldKey || !data.properties[oldKey]) {
     return { ok: false, error: "Property not in comparison list" };
   }
-  const viewed = !!data.properties[oldKey].viewed;
+  const prev = data.properties[oldKey];
+  const viewed = !!prev.viewed;
+  const score = HSCompare.normalizeScore(prev.score);
+  const user_notes = HSCompare.userNotesFromRow(prev);
   const newKey = HSCompare.normalizeUrl(row.url || oldKey);
   row.url = newKey;
   row.viewed = viewed;
+  row.score = score;
+  row.user_notes = user_notes;
   if (newKey !== oldKey) {
     data.urls = data.urls.map((u) => (u === oldKey ? newKey : u));
     delete data.properties[oldKey];
   }
-  data.properties[newKey] = { ...data.properties[oldKey], ...row, viewed };
+  data.properties[newKey] = { ...prev, ...row, viewed, score, user_notes };
   await HSCompare.saveAll(data);
   return { ok: true, url: newKey, address: row.address || "" };
 };
@@ -107,13 +118,20 @@ HSCompare.deleteProperties = async function deleteProperties(urls) {
   return { ok: true, count: data.urls.length, deleted: toDelete.size };
 };
 
-HSCompare.setViewed = async function setViewed(url, viewed) {
-  const data = await HSCompare.loadAll();
-  const key = HSCompare.normalizeUrl(url);
-  if (!data.properties[key]) return { ok: false, error: "Not found" };
-  data.properties[key].viewed = !!viewed;
-  await HSCompare.saveAll(data);
-  return { ok: true };
+HSCompare.normalizeScore = function normalizeScore(value) {
+  const n = parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(10, Math.max(0, n));
+};
+
+HSCompare.USER_NOTES_MAX = 1000;
+
+HSCompare.normalizeUserNotes = function normalizeUserNotes(value) {
+  return String(value ?? "").slice(0, HSCompare.USER_NOTES_MAX);
+};
+
+HSCompare.userNotesFromRow = function userNotesFromRow(row) {
+  return HSCompare.normalizeUserNotes(row?.user_notes ?? row?.notes ?? "");
 };
 
 /** Match a DOM attribute value to a key in urls[] (exact, decoded, or normalized). */
@@ -135,6 +153,39 @@ HSCompare.resolveStoredUrlKey = function resolveStoredUrlKey(urls, candidate) {
     /* not a valid HouseSigma URL string */
   }
   return null;
+};
+
+HSCompare.resolvePropertyKey = function resolvePropertyKey(data, url) {
+  const resolved = HSCompare.resolveStoredUrlKey(data.urls, url);
+  if (resolved) return resolved;
+  return HSCompare.normalizeUrl(url);
+};
+
+HSCompare.setViewed = async function setViewed(url, viewed) {
+  const data = await HSCompare.loadAll();
+  const key = HSCompare.resolvePropertyKey(data, url);
+  if (!data.properties[key]) return { ok: false, error: "Not found" };
+  data.properties[key].viewed = !!viewed;
+  await HSCompare.saveAll(data);
+  return { ok: true };
+};
+
+HSCompare.setScore = async function setScore(url, score) {
+  const data = await HSCompare.loadAll();
+  const key = HSCompare.resolvePropertyKey(data, url);
+  if (!data.properties[key]) return { ok: false, error: "Not found" };
+  data.properties[key].score = HSCompare.normalizeScore(score);
+  await HSCompare.saveAll(data);
+  return { ok: true, score: data.properties[key].score };
+};
+
+HSCompare.setUserNotes = async function setUserNotes(url, text) {
+  const data = await HSCompare.loadAll();
+  const key = HSCompare.resolvePropertyKey(data, url);
+  if (!data.properties[key]) return { ok: false, error: "Not found" };
+  data.properties[key].user_notes = HSCompare.normalizeUserNotes(text);
+  await HSCompare.saveAll(data);
+  return { ok: true, user_notes: data.properties[key].user_notes };
 };
 
 HSCompare.reorderUrls = async function reorderUrls(ordered) {
@@ -217,6 +268,9 @@ HSCompare.buildAppData = async function buildAppData() {
     row.url = row.url || u;
     row.google_maps = row.google_maps || HSCompare.mapsLinkForRow(row);
     row.viewed = !!row.viewed;
+    row.score = HSCompare.normalizeScore(row.score);
+    row.user_notes = HSCompare.userNotesFromRow(row);
+    delete row.notes;
     properties[u] = row;
   }
   return {

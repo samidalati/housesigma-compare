@@ -114,6 +114,11 @@
       return String(row.address || row.url || "").toLowerCase();
     }
     if (col === "viewed") return row.viewed ? 1 : 0;
+    if (col === "score") return HSCompare.normalizeScore(row.score);
+    if (col === "user_notes") {
+      const notes = HSCompare.userNotesFromRow(row);
+      return notes ? notes.toLowerCase() : null;
+    }
 
     const s = String(row[col] ?? "").trim();
     if (!s) return null;
@@ -350,13 +355,16 @@
   }
 
   function photoCell(row, key) {
-    const src = row.photo || "";
+    const src = String(row.photo || "").trim();
     const href = esc(row.url || key || "");
-    if (!src) return '<span class="no-photo">No photo</span>';
-    if (!href) {
-      return `<img class="listing-photo" src="${esc(src)}" alt="Listing photo" loading="lazy" />`;
+    if (!src) {
+      return '<div class="photo-slot photo-slot--empty" aria-label="No photo"></div>';
     }
-    return `<a class="photo-link" href="${href}" target="_blank" rel="noopener" aria-label="Open listing on HouseSigma"><img class="listing-photo" src="${esc(src)}" alt="Listing photo" loading="lazy" /></a>`;
+    const img = `<img class="listing-photo" src="${esc(src)}" alt="" width="120" height="90" loading="lazy" decoding="async" />`;
+    const inner = href
+      ? `<a class="photo-link" href="${href}" target="_blank" rel="noopener" aria-label="Open listing on HouseSigma">${img}</a>`
+      : img;
+    return `<div class="photo-slot">${inner}</div>`;
   }
 
   function selectCell(key) {
@@ -367,6 +375,20 @@
   function viewedCell(key, row) {
     const checked = row.viewed ? " checked" : "";
     return `<td class="col-viewed"><input type="checkbox" class="viewed-checkbox" data-url="${esc(key)}"${checked} aria-label="Mark as viewed" /></td>`;
+  }
+
+  function scoreCell(key, row) {
+    const score = HSCompare.normalizeScore(row.score);
+    const options = Array.from({ length: 11 }, (_, i) => {
+      const selected = i === score ? " selected" : "";
+      return `<option value="${i}"${selected}>${i}</option>`;
+    }).join("");
+    return `<td class="col-score"><select class="score-select" data-url="${esc(key)}" aria-label="Property score">${options}</select></td>`;
+  }
+
+  function userNotesInner(key, row) {
+    const text = HSCompare.userNotesFromRow(row);
+    return `<textarea class="notes-input" data-url="${esc(key)}" maxlength="${HSCompare.USER_NOTES_MAX}" rows="3" placeholder="Add notes…" aria-label="Notes">${esc(text)}</textarea>`;
   }
 
   function updateExportUi() {
@@ -402,6 +424,8 @@
 
   function exportValue(row, col) {
     if (col === "viewed") return row.viewed ? "yes" : "";
+    if (col === "score") return String(HSCompare.normalizeScore(row.score));
+    if (col === "user_notes") return HSCompare.userNotesFromRow(row);
     return row[col] ?? "";
   }
 
@@ -435,9 +459,10 @@
     const head = document.getElementById("compare-head");
     const labels = COLUMN_LABELS();
     let html = [
+      `<th class="col-drag"></th>`,
       `<th class="col-select"><input type="checkbox" class="select-checkbox" id="select-all-checkbox" aria-label="Select all" /></th>`,
       sortableTh("viewed", "Viewed"),
-      `<th class="col-drag"></th>`,
+      sortableTh("score", "Score"),
       `<th class="col-photo">Photo</th>`,
       sortableTh("property", "Property"),
       `<th class="col-map">Map</th>`,
@@ -461,7 +486,7 @@
 
   function renderTable(urls) {
     const tbody = document.getElementById("compare-body");
-    const colSpan = 6 + TABLE_COLS().length;
+    const colSpan = 7 + TABLE_COLS().length;
     const displayUrls = orderUrlsForDisplay(urls);
     const rows = displayUrls
       .map((key) => {
@@ -474,9 +499,10 @@
           : '<span class="cell-empty">—</span>';
         const selectedClass = selectedKeys.has(key) ? " is-selected" : "";
         let tds = [
+          `<td class="col-drag"><span class="drag-handle" title="Drag to reorder">${ICON_GRIP}</span></td>`,
           selectCell(key),
           viewedCell(key, row),
-          `<td class="col-drag"><span class="drag-handle" title="Drag to reorder">${ICON_GRIP}</span></td>`,
+          scoreCell(key, row),
           `<td class="col-photo">${photoCell(row, key)}</td>`,
           `<td class="col-property">${propLink}</td>`,
           `<td class="col-map">${maps}</td>`,
@@ -503,6 +529,9 @@
             const descCell = descriptionCell(val);
             cellClass = descCell.cellClass;
             inner = descCell.inner;
+          } else if (col === "user_notes") {
+            cellClass = "col-user_notes";
+            inner = userNotesInner(key, row);
           } else {
             inner = esc(val);
           }
@@ -745,15 +774,43 @@
       return;
     }
     const viewedCb = e.target.closest(".viewed-checkbox");
-    if (!viewedCb) return;
-    const url = viewedCb.getAttribute("data-url");
-    if (!url) return;
-    const res = await HSCompare.setViewed(url, viewedCb.checked);
-    if (res.ok) {
-      const row = rowForKey(url);
-      if (row) row.viewed = viewedCb.checked;
+    if (viewedCb) {
+      const url = viewedCb.getAttribute("data-url");
+      if (!url) return;
+      const res = await HSCompare.setViewed(url, viewedCb.checked);
+      if (res.ok) {
+        const row = rowForKey(url);
+        if (row) row.viewed = viewedCb.checked;
+      }
+      return;
+    }
+    const scoreSel = e.target.closest(".score-select");
+    if (scoreSel) {
+      const url = scoreSel.getAttribute("data-url");
+      if (!url) return;
+      const score = HSCompare.normalizeScore(scoreSel.value);
+      const res = await HSCompare.setScore(url, score);
+      if (res.ok) {
+        const row = rowForKey(url);
+        if (row) row.score = res.score;
+      }
+      return;
     }
   });
+
+  document.getElementById("compare-body").addEventListener("blur", async (e) => {
+    const notesInput = e.target.closest(".notes-input");
+    if (!notesInput) return;
+    const url = notesInput.getAttribute("data-url");
+    if (!url) return;
+    const text = HSCompare.normalizeUserNotes(notesInput.value);
+    notesInput.value = text;
+    const row = rowForKey(url);
+    const prev = HSCompare.userNotesFromRow(row);
+    if (text === prev) return;
+    const res = await HSCompare.setUserNotes(url, text);
+    if (res.ok && row) row.user_notes = res.user_notes;
+  }, true);
 
   document.body.addEventListener("click", async (e) => {
     const descBtn = e.target.closest(".btn-desc-expand");

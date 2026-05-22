@@ -313,9 +313,6 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
   if (!domVal) domVal = (house.text || {}).dom_long || "";
 
   const photoUrl = (resp.picture || {}).photo_url || "";
-  const notes = [];
-  if (raw.resolvedNote) notes.push(raw.resolvedNote);
-  if (soldNote) notes.push(soldNote);
 
   const address =
     house.address_navigation || house.address || "";
@@ -350,6 +347,7 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
     description: HSCompare.listingDescription(keyFacts),
     google_maps: HSCompare.googleMapsUrl(house, address),
     viewed: false,
+    score: 0,
     listed_price: house.price ?? "",
     last_sold_price: lastSoldPrice,
     last_sold_date: lastSoldDate,
@@ -376,7 +374,7 @@ HSCompare.buildPropertyRow = function buildPropertyRow(raw, pageUrl) {
     elementary_school: elemName,
     elementary_school_score: elemScore,
     scraped_at: HSCompare.nowIso(),
-    notes: notes.join("; "),
+    user_notes: "",
     _coords: lat != null && lon != null ? [lat, lon] : null,
   };
 };

@@ -375,6 +375,34 @@ td.col-description {
 .desc-cell.is-expanded .btn-desc-expand svg {
   transform: rotate(180deg);
 }
+th.col-user_notes,
+td.col-user_notes {
+  min-width: 25.2rem;
+  max-width: 39.2rem;
+  vertical-align: top;
+}
+.notes-input {
+  display: block;
+  width: 100%;
+  min-height: 3.6rem;
+  max-height: 6rem;
+  padding: 0.35rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.notes-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(26, 95, 95, 0.15);
+}
+.notes-input::placeholder {
+  color: var(--muted);
+}
 th.col-lot_size,
 td.col-lot_size {
   min-width: 11rem;
@@ -436,6 +464,25 @@ td.col-size {
   text-align: center;
   width: 3.25rem;
 }
+.col-score {
+  text-align: center;
+  width: 3rem;
+}
+.score-select {
+  width: 2.5rem;
+  max-width: 2.5rem;
+  padding: 0.15rem 0.1rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.score-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .select-checkbox,
 .viewed-checkbox {
   width: 1.1rem;
@@ -457,10 +504,28 @@ tr.compare-row:hover {
   color: var(--muted);
   display: flex;
 }
-.photo-link {
-  display: inline-block;
-  line-height: 0;
+.col-photo {
+  width: 8.5rem;
+  vertical-align: top;
+}
+.photo-slot {
+  width: 120px;
+  height: 90px;
   border-radius: 6px;
+  background: #eef1f4;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.photo-slot--empty {
+  border: 1px dashed var(--border);
+  background: #f4f6f8
+    url("icons/house.svg") center / 2rem 2rem no-repeat;
+}
+.photo-link {
+  display: block;
+  width: 120px;
+  height: 90px;
+  line-height: 0;
 }
 .photo-link:hover .listing-photo {
   opacity: 0.92;
@@ -470,15 +535,12 @@ tr.compare-row:hover {
   outline-offset: 2px;
 }
 .listing-photo {
-  max-width: 120px;
-  max-height: 90px;
+  width: 120px;
+  height: 90px;
   border-radius: 6px;
   object-fit: cover;
   display: block;
-}
-.no-photo {
-  color: var(--muted);
-  font-size: 0.75rem;
+  background: #eef1f4;
 }
 .property-link,
 .map-link {

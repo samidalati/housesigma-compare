@@ -7,6 +7,7 @@ HSCompare.COLUMNS = [
   "address",
   "google_maps",
   "viewed",
+  "score",
   "listed_price",
   "last_sold_price",
   "last_sold_date",
@@ -31,21 +32,25 @@ HSCompare.COLUMNS = [
   "elementary_school_score",
   "scraped_at",
   "description",
+  "user_notes",
 ];
 
 HSCompare.TABLE_COLUMNS = HSCompare.COLUMNS.filter(
-  (c) => !["url", "photo", "google_maps", "viewed"].includes(c)
+  (c) => !["url", "photo", "google_maps", "viewed", "score"].includes(c)
 );
 
 HSCompare.EXPORT_COLUMNS = [
   "url",
   "address",
+  "score",
   ...HSCompare.TABLE_COLUMNS,
 ];
 
 HSCompare.COLUMN_LABELS = {
+  score: "Score",
   address: "Address",
   description: "Description",
+  user_notes: "Notes",
   bedrooms: "Beds",
   bathrooms: "Bath",
   lot_size: "Lot Size",
