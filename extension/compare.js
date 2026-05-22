@@ -26,6 +26,7 @@
     generated: "",
   };
   const selectedKeys = new Set();
+  const sortState = { column: null, dir: "asc" };
 
   const ICON_REFRESH =
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1.1 6.4 2.8L21 8"/><path d="M21 3v5h-5"/></svg>';
@@ -33,6 +34,8 @@
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
   const ICON_MAP =
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  const ICON_CHEVRON_DOWN =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
 
   const TABLE_COLS = () => data.tableColumns;
   const EXPORT_COLS = () => data.exportColumns;
@@ -99,6 +102,132 @@
     const digits = String(val).replace(/[^0-9.]/g, "");
     if (!digits) return NaN;
     return parseFloat(digits);
+  }
+
+  function parsePercent(val) {
+    const m = String(val).match(/([\d.]+)/);
+    return m ? parseFloat(m[1]) : NaN;
+  }
+
+  function sortValueForColumn(row, col) {
+    if (col === "property") {
+      return String(row.address || row.url || "").toLowerCase();
+    }
+    if (col === "viewed") return row.viewed ? 1 : 0;
+
+    const s = String(row[col] ?? "").trim();
+    if (!s) return null;
+
+    if (col === "drive_to_office") {
+      const m = s.match(/(\d+)\s*min/i);
+      return m ? Number(m[1]) : null;
+    }
+    if (col === "last_sold_date" || col === "scraped_at") {
+      const t = Date.parse(s);
+      return Number.isFinite(t) ? t : null;
+    }
+    if (col === "days_on_market") {
+      const m = s.match(/(\d+)/);
+      return m ? Number(m[1]) : null;
+    }
+    if (col === "lot_area" || col === "lot_size") {
+      const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(n) ? n : s.toLowerCase();
+    }
+    if (
+      col === "listed_price" ||
+      col === "last_sold_price" ||
+      col === "property_tax" ||
+      col === "average_home_value" ||
+      col === "average_household_income"
+    ) {
+      const n = parseDollarAmount(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    if (
+      col === "low_income" ||
+      col === "renters" ||
+      col === "condos" ||
+      col === "households_with_children"
+    ) {
+      const n = parsePercent(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    if (
+      col === "bedrooms" ||
+      col === "bathrooms" ||
+      col === "garages" ||
+      col === "parking_spots" ||
+      col === "elementary_school_score"
+    ) {
+      const n = parseFloat(s.replace(/[^\d.]/g, ""));
+      return Number.isFinite(n) ? n : s.toLowerCase();
+    }
+    return s.toLowerCase();
+  }
+
+  function compareSortValues(a, b) {
+    const aEmpty = a == null || a === "";
+    const bEmpty = b == null || b === "";
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a).localeCompare(String(b), undefined, { numeric: true });
+  }
+
+  function orderUrlsForDisplay(urls) {
+    const col = sortState.column;
+    if (!col) return urls;
+    const dir = sortState.dir === "desc" ? -1 : 1;
+    return [...urls].sort((keyA, keyB) => {
+      const rowA = rowForKey(keyA);
+      const rowB = rowForKey(keyB);
+      if (!rowA && !rowB) return 0;
+      if (!rowA) return 1;
+      if (!rowB) return -1;
+      return (
+        compareSortValues(
+          sortValueForColumn(rowA, col),
+          sortValueForColumn(rowB, col)
+        ) * dir
+      );
+    });
+  }
+
+  function clearColumnSort() {
+    sortState.column = null;
+    sortState.dir = "asc";
+    renderTableHead();
+  }
+
+  async function applyColumnSort(col) {
+    if (sortState.column === col) {
+      sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+    } else {
+      sortState.column = col;
+      sortState.dir = "asc";
+    }
+    const ordered = orderUrlsForDisplay(data.urls);
+    const res = await HSCompare.reorderUrls(ordered);
+    if (res.ok) {
+      data.urls = res.urls;
+      renderTableHead();
+      renderTable(data.urls);
+    } else {
+      toast("Could not save sort order", true);
+    }
+  }
+
+  function sortableTh(col, label) {
+    const active = sortState.column === col;
+    const ariaSort = active
+      ? sortState.dir === "asc"
+        ? "ascending"
+        : "descending"
+      : "none";
+    const arrow = active ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+    return `<th class="col-${col} th-sortable${active ? ` is-sorted-${sortState.dir}` : ""}" data-sort-col="${esc(col)}" aria-sort="${ariaSort}" tabindex="0" title="Sort by ${esc(label)}"><span class="th-sort-label">${esc(label)}</span><span class="sort-indicator" aria-hidden="true">${arrow}</span></th>`;
   }
   function householdIncomeHighlightClass(val) {
     const n = parseDollarAmount(val);
@@ -206,6 +335,20 @@
     };
   }
 
+  function descriptionCell(val) {
+    const text = String(val ?? "").trim();
+    if (!text) {
+      return { cellClass: "cell-empty col-description", inner: "—" };
+    }
+    return {
+      cellClass: "col-description",
+      inner: `<div class="desc-cell">
+        <div class="desc-body">${esc(text)}</div>
+        <button type="button" class="btn-desc-expand" aria-expanded="false" aria-label="Expand description">${ICON_CHEVRON_DOWN}</button>
+      </div>`,
+    };
+  }
+
   function photoCell(row, key) {
     const src = row.photo || "";
     const href = esc(row.url || key || "");
@@ -292,16 +435,16 @@
     const head = document.getElementById("compare-head");
     const labels = COLUMN_LABELS();
     let html = [
-      `<th class="col-select"><input type="checkbox" id="select-all-checkbox" aria-label="Select all" /></th>`,
-      `<th class="col-viewed">Viewed</th>`,
+      `<th class="col-select"><input type="checkbox" class="select-checkbox" id="select-all-checkbox" aria-label="Select all" /></th>`,
+      sortableTh("viewed", "Viewed"),
       `<th class="col-drag"></th>`,
       `<th class="col-photo">Photo</th>`,
-      `<th class="col-property">Property</th>`,
+      sortableTh("property", "Property"),
       `<th class="col-map">Map</th>`,
     ];
     for (const col of TABLE_COLS()) {
       html.push(
-        `<th class="col-${col}">${esc(labels[col] || HSCompare.columnLabel(col))}</th>`
+        sortableTh(col, labels[col] || HSCompare.columnLabel(col))
       );
     }
     head.innerHTML = html.join("");
@@ -319,7 +462,8 @@
   function renderTable(urls) {
     const tbody = document.getElementById("compare-body");
     const colSpan = 6 + TABLE_COLS().length;
-    const rows = urls
+    const displayUrls = orderUrlsForDisplay(urls);
+    const rows = displayUrls
       .map((key) => {
         const row = rowForKey(key);
         if (!row) return "";
@@ -355,6 +499,10 @@
             inner = driveCell.inner;
           } else if (col === "transit_to_office" && String(val).startsWith("http")) {
             inner = `<a class="property-link" href="${esc(val)}" target="_blank" rel="noopener">Transit</a>`;
+          } else if (col === "description") {
+            const descCell = descriptionCell(val);
+            cellClass = descCell.cellClass;
+            inner = descCell.inner;
           } else {
             inner = esc(val);
           }
@@ -418,6 +566,7 @@
           const res = await HSCompare.reorderUrls(order);
           if (res.ok) {
             data.urls = res.urls;
+            clearColumnSort();
             toast("Order saved");
           } else {
             toast("Could not save order", true);
@@ -569,6 +718,22 @@
     promptImport(true);
   });
 
+  document.getElementById("compare-head").addEventListener("click", (e) => {
+    const th = e.target.closest(".th-sortable");
+    if (!th) return;
+    const col = th.getAttribute("data-sort-col");
+    if (!col) return;
+    applyColumnSort(col);
+  });
+  document.getElementById("compare-head").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const th = e.target.closest(".th-sortable");
+    if (!th) return;
+    e.preventDefault();
+    const col = th.getAttribute("data-sort-col");
+    if (col) applyColumnSort(col);
+  });
+
   document.getElementById("compare-body").addEventListener("change", async (e) => {
     const selectCb = e.target.closest(".select-checkbox");
     if (selectCb) {
@@ -591,6 +756,20 @@
   });
 
   document.body.addEventListener("click", async (e) => {
+    const descBtn = e.target.closest(".btn-desc-expand");
+    if (descBtn) {
+      e.preventDefault();
+      const cell = descBtn.closest(".desc-cell");
+      if (cell) {
+        const expanded = cell.classList.toggle("is-expanded");
+        descBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+        descBtn.setAttribute(
+          "aria-label",
+          expanded ? "Collapse description" : "Expand description"
+        );
+      }
+      return;
+    }
     const driveBtn = e.target.closest(".btn-drive-refresh");
     if (driveBtn) {
       e.preventDefault();
@@ -602,7 +781,7 @@
         const res = await refreshDriveTimeForKey(attrKey);
         if (res.ok) {
           renderTable(data.urls);
-          toast(`Drive to office: ${res.drive}`);
+          toast(`Drive time: ${res.drive}`);
         } else {
           toast(res.error || "Drive time failed", true);
         }

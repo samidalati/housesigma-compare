@@ -44,9 +44,10 @@ HSCompare.EXPORT_COLUMNS = [
 ];
 
 HSCompare.COLUMN_LABELS = {
+  address: "Address",
   description: "Description",
-  bedrooms: "beds",
-  bathrooms: "bath",
+  bedrooms: "Beds",
+  bathrooms: "Bath",
   lot_size: "Lot Size",
   lot_area: "Lot Area",
   size: "Size",
@@ -69,8 +70,18 @@ HSCompare.COLUMN_LABELS = {
   scraped_at: "Scraped At",
 };
 
+HSCompare.titleCaseLabel = function titleCaseLabel(text) {
+  return String(text || "")
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+};
+
 HSCompare.columnLabel = function columnLabel(col) {
-  return HSCompare.COLUMN_LABELS[col] || col.replace(/_/g, " ");
+  if (HSCompare.COLUMN_LABELS[col]) return HSCompare.COLUMN_LABELS[col];
+  return HSCompare.titleCaseLabel(col);
 };
 
 HSCompare.BACKUP_VERSION = 1;
